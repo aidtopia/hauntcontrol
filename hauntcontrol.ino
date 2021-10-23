@@ -4,7 +4,8 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
-#include "audiomodule.h"
+#include "audiomodule.h"  // Catalex or DFPlayer Mini audio player
+#include "msgeq07.h"      // graphic equalizer chip
 
 const int red_button = 2;
 const int green_button = 3;
@@ -18,61 +19,11 @@ const int eq_strobe = 13;
 const int eq_display[] = { 6, 7, 8, 9 };
 
 SoftwareSerial audio_serial(rx_from_audio, tx_to_audio);
-
 typedef AudioModule MyAudioModule;
 MyAudioModule audio_board(&audio_serial);
 
 char buf[32];
 int buflen = 0;
-
-class MSGEQ7 {
-  public:
-    void begin(int reset_pin, int strobe_pin, int output_pin, const int eq_display[4]) {
-      m_reset_pin = reset_pin;
-      pinMode(m_reset_pin, OUTPUT);
-      digitalWrite(m_reset_pin, LOW);
-      m_strobe_pin = strobe_pin;
-      pinMode(m_strobe_pin, OUTPUT);
-      digitalWrite(m_strobe_pin, LOW);
-      m_output_pin = output_pin;
-      for (int i = 0; i < 4; ++i) {
-        m_eq_display[i] = eq_display[i];
-        pinMode(m_eq_display[i], OUTPUT);
-        digitalWrite(m_eq_display[i], LOW);
-      }      
-    }
-
-    void update() {
-      digitalWrite(m_reset_pin, HIGH);
-      digitalWrite(m_strobe_pin, HIGH);
-      delayMicroseconds(18);
-      digitalWrite(m_strobe_pin, LOW);
-      delayMicroseconds(18);
-      digitalWrite(m_strobe_pin, HIGH);
-      digitalWrite(m_reset_pin, LOW);
-      delayMicroseconds(18);
-      for (int i = 0; i < 7; ++i) {
-        digitalWrite(m_strobe_pin, LOW);
-        delayMicroseconds(36);
-        m_channels[i] = analogRead(m_output_pin);
-        digitalWrite(m_strobe_pin, HIGH);
-        delayMicroseconds(36);
-      }
-
-      // Show channel 1 (160 Hz) in the eq display.
-      digitalWrite(m_eq_display[0], m_channels[1] >   0 ? HIGH : LOW);
-      digitalWrite(m_eq_display[1], m_channels[1] > 255 ? HIGH : LOW);
-      digitalWrite(m_eq_display[2], m_channels[1] > 511 ? HIGH : LOW);
-      digitalWrite(m_eq_display[3], m_channels[1] > 767 ? HIGH : LOW);
-    }
-
-  private:
-    int m_reset_pin;
-    int m_strobe_pin;
-    int m_output_pin;
-    int m_channels[7];
-    int m_eq_display[4];
-} msgeq7;
 
 class Parser {
   public:
@@ -299,21 +250,25 @@ class Parser {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("Hello Audio Module"));
+  Serial.println(F("Haunt Control by Hayward Haunter"));
+  Serial.println(F("Copyright 2021 Adrian McCarthy"));
   pinMode(red_button, INPUT_PULLUP);
   pinMode(green_button, INPUT_PULLUP);
   pinMode(blue_button, INPUT_PULLUP);
   pinMode(yellow_button, INPUT_PULLUP);
+
+#if 0
   pinMode(rx_from_audio, INPUT);  // Will SoftwareSerial::begin()
   pinMode(tx_to_audio, OUTPUT);   // handle these pinModes?
-
   audio_serial.begin(9600);
   audio_board.begin();
 
   msgeq7.begin(eq_reset, eq_strobe, eq_output, eq_display);
+#endif
 }
 
 void loop() {
+#if 0
   if (digitalRead(red_button) == LOW) {
     Serial.println(F("red button pressed"));
     audio_board.selectSource(MyAudioModule::DEV_SDCARD);
@@ -337,6 +292,7 @@ void loop() {
   audio_board.update();
 
   msgeq7.update();
+#endif
 
   while (Serial.available()) {
     char ch = Serial.read();
