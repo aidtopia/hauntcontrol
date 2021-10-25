@@ -5,8 +5,10 @@
 #include <SoftwareSerial.h>
 
 #include "audiomodule.h"  // Catalex or DFPlayer Mini audio player
+#include "motion.h"
 #include "msgeq07.h"      // graphic equalizer chip
 
+// Pin assignments
 const int red_button = 2;
 const int green_button = 3;
 const int blue_button = 4;
@@ -21,6 +23,7 @@ const int eq_display[] = { 6, 7, 8, 9 };
 SoftwareSerial audio_serial(rx_from_audio, tx_to_audio);
 typedef AudioModule MyAudioModule;
 MyAudioModule audio_board(&audio_serial);
+MotionSensor motion;
 
 char buf[32];
 int buflen = 0;
@@ -252,6 +255,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println(F("Haunt Control by Hayward Haunter"));
   Serial.println(F("Copyright 2021 Adrian McCarthy"));
+
   pinMode(red_button, INPUT_PULLUP);
   pinMode(green_button, INPUT_PULLUP);
   pinMode(blue_button, INPUT_PULLUP);
@@ -265,6 +269,9 @@ void setup() {
 
   msgeq7.begin(eq_reset, eq_strobe, eq_output, eq_display);
 #endif
+
+  motion.begin(51, 50);
+  Serial.println(F("Initialization complete."));
 }
 
 void loop() {
@@ -293,6 +300,13 @@ void loop() {
 
   msgeq7.update();
 #endif
+
+  if (motion.update()) {
+    switch (motion.getState()) {
+      case MotionSensor::idle: Serial.println(F("Motion ceased.")); break;
+      case MotionSensor::triggered: Serial.println(F("Motion detected.")); break;
+    }
+  }
 
   while (Serial.available()) {
     char ch = Serial.read();
