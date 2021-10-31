@@ -5,6 +5,7 @@
 #include <SoftwareSerial.h>
 
 #include "audiomodule.h"  // Catalex or DFPlayer Mini audio player
+#include "commandbuffer.h"
 #include "motion.h"
 #include "msgeq07.h"      // graphic equalizer chip
 #include "parser.h"
@@ -26,14 +27,14 @@ typedef AudioModule MyAudioModule;
 MyAudioModule audio_board(&audio_serial);
 MotionSensor motion;
 
-char buf[32];
-int buflen = 0;
+CommandBuffer<32> command;
 auto parser = Parser<MyAudioModule>(audio_board);
 
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Haunt Control by Hayward Haunter"));
   Serial.println(F("Copyright 2021 Adrian McCarthy"));
+  command.begin();
 
   pinMode(red_button, INPUT_PULLUP);
   pinMode(green_button, INPUT_PULLUP);
@@ -52,7 +53,7 @@ void setup() {
   pinMode(spit_valve, OUTPUT);
   digitalWrite(spit_valve, HIGH);
   motion.begin(50, 51);
-  Serial.println(F("Initialization complete."));
+  Serial.println(F("Ready."));
 }
 
 void loop() {
@@ -95,18 +96,7 @@ void loop() {
     }
   }
 
-  while (Serial.available()) {
-    char ch = Serial.read();
-    if (buflen == sizeof(buf)) buflen = 0;
-    if (ch != '\n') {
-      buf[buflen++] = ch;
-      continue;
-    }
-
-    buf[buflen] = '\0';
-    buflen = 0;
-    Serial.print(F("> "));
-    Serial.println(buf);
-    parser.parse(buf);
+  if (command.available()) {
+    parser.parse(command);
   }
 }
