@@ -19,7 +19,7 @@ const int eq_output = A0;
 const int eq_reset = 12;
 const int eq_strobe = 13;
 const int eq_display[] = { 6, 7, 8, 9 };
-
+constexpr int spit_valve = 23;
 SoftwareSerial audio_serial(rx_from_audio, tx_to_audio);
 typedef AudioModule MyAudioModule;
 MyAudioModule audio_board(&audio_serial);
@@ -270,7 +270,9 @@ void setup() {
   msgeq7.begin(eq_reset, eq_strobe, eq_output, eq_display);
 #endif
 
-  motion.begin(51, 50);
+  pinMode(spit_valve, OUTPUT);
+  digitalWrite(spit_valve, HIGH);
+  motion.begin(50, 51);
   Serial.println(F("Initialization complete."));
 }
 
@@ -303,8 +305,14 @@ void loop() {
 
   if (motion.update()) {
     switch (motion.getState()) {
-      case MotionSensor::idle: Serial.println(F("Motion ceased.")); break;
-      case MotionSensor::triggered: Serial.println(F("Motion detected.")); break;
+      case MotionSensor::idle:
+        digitalWrite(spit_valve, HIGH);
+        Serial.println(F("Motion ceased."));
+        break;
+      case MotionSensor::triggered:
+        Serial.println(F("Motion detected."));
+        digitalWrite(spit_valve, LOW);
+        break;
     }
   }
 

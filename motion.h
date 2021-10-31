@@ -5,6 +5,7 @@ class MotionSensor {
       m_led_pin = led_pin;
 
       pinMode(m_sensor_pin, INPUT);
+      // SparkFun sensor needs a pullup and is active low
 
       if (m_led_pin != 0) {
         pinMode(m_led_pin, OUTPUT);
