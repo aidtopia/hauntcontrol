@@ -1,3 +1,8 @@
+// AudioModule
+// Adrian McCarthy 2019-
+
+// A library that works with various serial audio modules,
+// like DFPlayer Mini, Catalex, etc.
 
 #include "timeout.h"
 
@@ -13,58 +18,12 @@ constexpr uint8_t low(uint16_t x) {
   return x & 0xFF;
 }
 
-// Represents an audio module based on the YX5200 or YX5300 chip.
-// Works with DFPlayer Mini as well as Catalex and can probably
-// be extended to others.
-class AudioModule {
+class BasicAudioModule {
   public:
-    // Pass the instance of `Serial` or `SoftwareSerial` you'll
-    // use to connect to the audio module.
-    //
-    // For example, if you're on a Mega and using Serial2, you
-    // can instantiate this class with:
-    //
-    //   AudioModule my_audio(&Serial2);
-    //
-    // Then, in your `setup`, you must initialize the serial
-    // port before your audio device, like this:
-    //
-    //    void setup() {
-    //      Serial2.begin(9600);
-    //      my_audio.begin();
-    //    }
-    // 
-    // If you're instead using SoftwareSerial, you must declare
-    // the instance and then pass the address of it to this
-    // constructor.  For example:
-    //
-    //   const int rx_from_audio = 11;
-    //   const int tx_from_audio = 10;
-    //   SoftwareSerial audio_serial(rx_from_audio, tx_to_audio);
-    //   AudioModule my_audio(&audio_serial);
-    //
-    // Then, in your `setup`, you must set the pin modes, begin
-    // the serial device, and then begin this class, like this:
-    //
-    //   void setup() {
-    //     pinMode(rx_from_audio, INPUT);
-    //     pinMode(tx_to_audio, OUTPUT);
-    //     audio_serial.begin(9600);
-    //     my_audio.begin();
-    //   }
-    AudioModule(Stream *serial) :
-      m_serial(serial), m_in(), m_out(), m_state(nullptr),
-      m_timeout() {}
+    explicit BasicAudioModule(Stream *stream) :
+      m_stream(stream), m_in(), m_out(), m_state(nullptr), m_timeout() {}
 
-    AudioModule(const AudioModule &) = delete;
-    AudioModule &operator=(const AudioModule &) = delete;
-    AudioModule(AudioModule &&) = delete;
-    AudioModule &operator=(AudioModule &&) = delete;
-
-    // Initialization to be done during `setup`.
-    void begin() {
-      reset();
-    }
+    virtual void begin() { reset(); }
 
     // Call each time through `loop`.
     void update() {
@@ -733,11 +692,23 @@ class AudioModule {
         // the operation is complete and the user can make a new request,
         // or a pointer to another State in order to chain a series of
         // operations together.
-        virtual State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) { return this; }
+        virtual State *onEvent(
+          BasicAudioModule * /*module*/,
+          MsgID /*msgid*/,
+          uint8_t /*paramHi*/,
+          uint8_t /*paramLo*/
+        ) {
+          return this;
+        }
     };
 
     struct InitResettingHardware : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(
+          BasicAudioModule *module,
+          MsgID msgid,
+          uint8_t /*paramHi*/,
+          uint8_t /*paramLo*/
+      ) override {
         switch (msgid) {
           case MID_ENTERSTATE:
             Serial.println(F("Resetting hardware."));
@@ -746,7 +717,7 @@ class AudioModule {
             module->m_timeout.set(10000);
             return this;
           case MID_INITCOMPLETE:
-            return &AudioModule::s_init_getting_version;
+            return &BasicAudioModule::s_init_getting_version;
           default: break;
         }
         return this;
@@ -755,7 +726,7 @@ class AudioModule {
     static InitResettingHardware s_init_resetting_hardware;
 
     struct InitGettingVersion : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(BasicAudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
         switch (msgid) {
           case MID_ENTERSTATE:
             module->queryFirmwareVersion();
@@ -775,10 +746,10 @@ class AudioModule {
     static InitGettingVersion s_init_getting_version;
 
     struct InitCheckingUSBFileCount : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(BasicAudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
         switch (msgid) {
           case MID_ENTERSTATE:
-            module->queryFileCount(AudioModule::DEV_USB);
+            module->queryFileCount(BasicAudioModule::DEV_USB);
             return this;
           case MID_USBFILECOUNT: {
             const auto count = (static_cast<uint16_t>(paramHi) << 8) | paramLo;
@@ -796,10 +767,10 @@ class AudioModule {
     static InitCheckingUSBFileCount s_init_checking_usb_file_count;
     
     struct InitCheckingSDFileCount : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(BasicAudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
         switch (msgid) {
           case MID_ENTERSTATE:
-            module->queryFileCount(AudioModule::DEV_SDCARD);
+            module->queryFileCount(BasicAudioModule::DEV_SDCARD);
             return this;
           case MID_SDFILECOUNT: {
             const auto count = (static_cast<uint16_t>(paramHi) << 8) | paramLo;
@@ -817,13 +788,18 @@ class AudioModule {
     static InitCheckingSDFileCount s_init_checking_sd_file_count;
 
     struct InitSelectingUSB : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(
+        BasicAudioModule *module,
+        MsgID msgid,
+        uint8_t /*paramHi*/,
+        uint8_t /*paramLo*/
+      ) override {
         switch (msgid) {
           case MID_ENTERSTATE:
-            module->selectSource(AudioModule::DEV_USB);
+            module->selectSource(BasicAudioModule::DEV_USB);
             return this;
           case MID_ACK:
-            module->m_source = AudioModule::DEV_USB;
+            module->m_source = BasicAudioModule::DEV_USB;
             return &s_init_checking_folder_count;
           default: break;
         }
@@ -833,13 +809,18 @@ class AudioModule {
     static InitSelectingUSB s_init_selecting_usb;
 
     struct InitSelectingSD : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(
+        BasicAudioModule *module,
+        MsgID msgid,
+        uint8_t /*paramHi*/,
+        uint8_t /*paramLo*/
+      ) override {
         switch (msgid) {
           case MID_ENTERSTATE:
-            module->selectSource(AudioModule::DEV_SDCARD);
+            module->selectSource(BasicAudioModule::DEV_SDCARD);
             return this;
           case MID_ACK:
-            module->m_source = AudioModule::DEV_SDCARD;
+            module->m_source = BasicAudioModule::DEV_SDCARD;
             return &s_init_checking_folder_count;
           default: break;
         }
@@ -849,7 +830,12 @@ class AudioModule {
     static InitSelectingSD s_init_selecting_sd;
 
     struct InitCheckingFolderCount : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(
+        BasicAudioModule *module,
+        MsgID msgid,
+        uint8_t /*paramHi*/,
+        uint8_t paramLo
+      ) override {
         switch (msgid) {
           case MID_ENTERSTATE:
             module->queryFolderCount();
@@ -872,7 +858,12 @@ class AudioModule {
     static InitCheckingFolderCount s_init_checking_folder_count;
 
     struct InitStartPlaying : public State {
-      State *onEvent(AudioModule *module, MsgID msgid, uint8_t paramHi, uint8_t paramLo) override {
+      State *onEvent(
+        BasicAudioModule *module,
+        MsgID msgid,
+        uint8_t /*paramHi*/,
+        uint8_t /*paramLo*/
+      ) override {
         switch (msgid) {
           case MID_ENTERSTATE:
             module->sendCommand(MID_LOOPFOLDER, 1);
@@ -887,8 +878,8 @@ class AudioModule {
     static InitStartPlaying s_init_start_playing;
 
     void checkForIncomingMessage() {
-      while (m_serial->available() > 0) {
-        if (m_in.receive(m_serial->read())) {
+      while (m_stream->available() > 0) {
+        if (m_in.receive(m_stream->read())) {
           receiveMessage(m_in);
         }
       }
@@ -913,7 +904,7 @@ class AudioModule {
     void sendMessage(const Message &msg) {
       const auto buf = msg.getBuffer();
       const auto len = msg.getLength();
-      m_serial->write(buf, len);
+      m_stream->write(buf, len);
       m_timeout.set(200);
       onMessageSent(buf, len);
     }
@@ -938,7 +929,7 @@ class AudioModule {
     // TODO:  Guess the module type.
     enum Module { MOD_UNKNOWN, MOD_CATALEX, MOD_DFPLAYERMINI };
 
-    Stream  *m_serial;
+    Stream  *m_stream;
     Message  m_in;
     Message  m_out;
     State   *m_state;
@@ -948,11 +939,32 @@ class AudioModule {
     uint8_t  m_folders;  // the number of folders on the selected device
 };
 
-AudioModule::InitResettingHardware    AudioModule::s_init_resetting_hardware;
-AudioModule::InitGettingVersion       AudioModule::s_init_getting_version;
-AudioModule::InitCheckingUSBFileCount AudioModule::s_init_checking_usb_file_count;
-AudioModule::InitCheckingSDFileCount  AudioModule::s_init_checking_sd_file_count;
-AudioModule::InitSelectingUSB         AudioModule::s_init_selecting_usb;
-AudioModule::InitSelectingSD          AudioModule::s_init_selecting_sd;
-AudioModule::InitCheckingFolderCount  AudioModule::s_init_checking_folder_count;
-AudioModule::InitStartPlaying         AudioModule::s_init_start_playing;
+template <typename SerialType>
+class AudioModule : public BasicAudioModule {
+  public:
+    explicit AudioModule(SerialType *serial) :
+      BasicAudioModule(serial), m_serial(serial) {}
+
+    // Initialization to be done during `setup`.
+    void begin() {
+      m_serial->begin(9600);
+      BasicAudioModule::begin();
+    }
+
+  private:
+    SerialType *m_serial;
+};
+
+template <typename SerialType>
+AudioModule<SerialType> make_AudioModule(SerialType *serial) {
+  return AudioModule<SerialType>(serial);
+}
+
+BasicAudioModule::InitResettingHardware    BasicAudioModule::s_init_resetting_hardware;
+BasicAudioModule::InitGettingVersion       BasicAudioModule::s_init_getting_version;
+BasicAudioModule::InitCheckingUSBFileCount BasicAudioModule::s_init_checking_usb_file_count;
+BasicAudioModule::InitCheckingSDFileCount  BasicAudioModule::s_init_checking_sd_file_count;
+BasicAudioModule::InitSelectingUSB         BasicAudioModule::s_init_selecting_usb;
+BasicAudioModule::InitSelectingSD          BasicAudioModule::s_init_selecting_sd;
+BasicAudioModule::InitCheckingFolderCount  BasicAudioModule::s_init_checking_folder_count;
+BasicAudioModule::InitStartPlaying         BasicAudioModule::s_init_start_playing;

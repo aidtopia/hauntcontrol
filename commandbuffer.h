@@ -7,10 +7,10 @@ class CommandBuffer {
     }
 
     bool available() {
-        while (Serial.available()) {
-          char ch = Serial.read();
-          if (buflen == sizeof(buf)) buflen = 0;
-          if (ch != '\n') {
+      while (Serial.available()) {
+        char ch = Serial.read();
+        if (buflen == sizeof(buf)) buflen = 0;
+        if (ch != '\n') {
           buf[buflen++] = ch;
           continue;
         }

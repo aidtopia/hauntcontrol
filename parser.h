@@ -1,6 +1,6 @@
-template <typename MyAudioModule>
 class Parser {
   public:
+    using MyAudioModule = BasicAudioModule;
     explicit Parser(MyAudioModule &audio) : m_audio(audio), m_p(nullptr) {}
 
     bool parse(const char *buf) {
