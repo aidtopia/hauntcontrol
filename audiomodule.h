@@ -20,7 +20,7 @@ constexpr uint8_t low(uint16_t x) {
 
 class BasicAudioModule {
   public:
-    explicit BasicAudioModule(Stream *stream) :
+    explicit BasicAudioModule(Stream &stream) :
       m_stream(stream), m_in(), m_out(), m_state(nullptr), m_timeout() {}
 
     virtual void begin() { reset(); }
@@ -878,8 +878,8 @@ class BasicAudioModule {
     static InitStartPlaying s_init_start_playing;
 
     void checkForIncomingMessage() {
-      while (m_stream->available() > 0) {
-        if (m_in.receive(m_stream->read())) {
+      while (m_stream.available() > 0) {
+        if (m_in.receive(m_stream.read())) {
           receiveMessage(m_in);
         }
       }
@@ -904,7 +904,7 @@ class BasicAudioModule {
     void sendMessage(const Message &msg) {
       const auto buf = msg.getBuffer();
       const auto len = msg.getLength();
-      m_stream->write(buf, len);
+      m_stream.write(buf, len);
       m_timeout.set(200);
       onMessageSent(buf, len);
     }
@@ -929,7 +929,7 @@ class BasicAudioModule {
     // TODO:  Guess the module type.
     enum Module { MOD_UNKNOWN, MOD_CATALEX, MOD_DFPLAYERMINI };
 
-    Stream  *m_stream;
+    Stream  &m_stream;
     Message  m_in;
     Message  m_out;
     State   *m_state;
@@ -942,21 +942,21 @@ class BasicAudioModule {
 template <typename SerialType>
 class AudioModule : public BasicAudioModule {
   public:
-    explicit AudioModule(SerialType *serial) :
+    explicit AudioModule(SerialType &serial) :
       BasicAudioModule(serial), m_serial(serial) {}
 
     // Initialization to be done during `setup`.
     void begin() {
-      m_serial->begin(9600);
+      m_serial.begin(9600);
       BasicAudioModule::begin();
     }
 
   private:
-    SerialType *m_serial;
+    SerialType &m_serial;
 };
 
 template <typename SerialType>
-AudioModule<SerialType> make_AudioModule(SerialType *serial) {
+AudioModule<SerialType> make_AudioModule(SerialType &serial) {
   return AudioModule<SerialType>(serial);
 }
 

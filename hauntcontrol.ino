@@ -14,8 +14,7 @@
 
 // Devices
 auto lcd = make_LCD(Serial1);
-auto audio_board = make_AudioModule(&Serial2);
-MotionSensor motion;
+auto audio_board = make_AudioModule(Serial2);
 
 CommandBuffer<32> command;
 auto parser = Parser(audio_board);
