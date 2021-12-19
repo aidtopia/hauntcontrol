@@ -1,25 +1,25 @@
 // Haunt Control
 // Adrian McCarthy 2021
 
-// Currently requires an Arduino Mega 2560 for mulitple hardware serial devices.
+// Using Arduino Pro Mini for now.
 
 #include <Arduino.h>
+#include <SoftwareSerial.h>
 
 #include "audiomodule.h"  // Catalex or DFPlayer Mini audio player
 #include "commandbuffer.h"
-#include "lcd_display.h"  // 16x2 LCD character display
+#include "lcd_display.h"  // LCD character display
 #include "motion.h"       // PIR motion sensor
 #include "msgeq07.h"      // graphic equalizer chip
 #include "parser.h"
 
 // Devices
-auto lcd = make_LCD(Serial1);
-auto audio_board = make_AudioModule(Serial2);
+SoftwareSerial serial_for_audio(11, 10);
+auto audio_board = make_AudioModule(serial_for_audio);
+auto frequency_analyzer = MSGEQ7(12, 13, A0);
 
 CommandBuffer<32> command;
 auto parser = Parser(audio_board);
-
-unsigned long timeout_time = ULONG_MAX;
 
 void setup() {
   Serial.begin(115200);
@@ -29,18 +29,21 @@ void setup() {
   Serial.print(F("Clock frequency: "));
   Serial.println(F_CPU);
 
-  audio_board.begin();
-  lcd.begin();
-  command.begin();
+//  lcd.begin();
+//  lcd.println(F("Haunt Control"));
+//  lcd.print(F("Initializing..."));
 
-  lcd.println(F("Haunt Control"));
-  lcd.print(F("Ready."));
-  Serial.println(F("Ready."));
+  audio_board.begin();
+  command.begin();
+  
+//  lcd.moveTo(1, 0);
+//  lcd.print(F("Ready.          "));
 }
 
 void loop() {
   audio_board.update();
-  lcd.update();
+  frequency_analyzer.update();
+//  lcd.update();
 
   if (command.available()) {
     parser.parse(command);

@@ -1,11 +1,10 @@
 // Class to control a SparkFun SerLCD display.
 // Adrian McCarthy 2021
 
-template <typename SerialType>
-class LCD {
+class BasicLCD {
   public:
-    explicit LCD(SerialType &serial) :
-      m_serial(&serial),
+    explicit BasicLCD(Stream &stream) :
+      m_stream(stream),
 
       // We don't know the initial backlight brightness setting, so we'll
       // set this to 0, which will force us to acknowledge the first
@@ -17,10 +16,7 @@ class LCD {
       m_block_until(millis() + 501)
     {}
 
-    void begin(long baud = 9600) {
-      m_serial->begin(baud);
-      clear();
-    }
+    void begin() { clear(); }
 
     // Set the backlight brightness to a percentage from 0 to 100.
     void setBacklight(int percent) {
@@ -53,13 +49,13 @@ class LCD {
     template <typename T>
     size_t print(T data) {
       waitForReady();
-      return m_serial->print(data);
+      return m_stream.print(data);
     }
 
     template <typename T>
     size_t println(T data) {
       waitForReady();
-      const auto count = m_serial->print(data);
+      const auto count = m_stream.print(data);
       moveTo(1, 0);
       return count;
     }
@@ -76,41 +72,54 @@ class LCD {
 
     size_t write(const char *text) {
       waitForReady();
-      return m_serial->write(text);
+      return m_stream.write(text);
     }
 
     size_t write(char ch) {
       waitForReady();
-      return m_serial->write(&ch, 1);
+      return m_stream.write(&ch, 1);
     }
 
   private:
     void sendCommand(char ch) {
       waitForReady();
-      m_serial->write(0xFE);
-      m_serial->write(ch);
+      m_stream.write(0xFE);
+      m_stream.write(ch);
     }
 
     void sendInterfaceCommand(char ch) {
       waitForReady();
-      m_serial->write(0x7C);
-      m_serial->write(ch);
+      m_stream.write(0x7C);
+      m_stream.write(ch);
       // This is not documented, but apparently you need a delay after
-      // sending an interface command or the display can lock up.
-      m_block_until = millis() + 500;
+      // sending an interface command or the display can lock up.  (Maybe
+      // it's just certain commands?)
+      ////m_block_until = millis() + 500;
     }
 
     void waitForReady() {
-      // We do not account for wraparound after 49 days.
+      // We do not account for rollover after 49 days.
       const unsigned long now = millis();
       if (m_block_until > now) {
         delay(m_block_until - now);
       }
     }
 
-    SerialType * const m_serial;
+    Stream &m_stream;
     int m_brightness;
     unsigned long m_block_until;
+};
+
+template <typename SerialType>
+class LCD : public BasicLCD {
+  public:
+    explicit LCD(SerialType &serial) : BasicLCD(serial), m_serial(serial) {}
+    void begin() {
+      m_serial.begin(9600);
+      BasicLCD::begin();
+    }
+  private:
+    SerialType &m_serial;
 };
 
 template <typename SerialType>

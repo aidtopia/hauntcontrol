@@ -1,22 +1,10 @@
 // AudioModule
-// Adrian McCarthy 2019-
+// Adrian McCarthy 2018-
 
 // A library that works with various serial audio modules,
 // like DFPlayer Mini, Catalex, etc.
 
 #include "timeout.h"
-
-constexpr uint16_t combine(uint8_t hi, uint8_t lo) {
-  return static_cast<uint16_t>(hi << 8) | lo;
-}
-
-constexpr uint8_t high(uint16_t x) {
-  return x >> 8;
-}
-
-constexpr uint8_t low(uint16_t x) {
-  return x & 0xFF;
-}
 
 class BasicAudioModule {
   public:
@@ -223,7 +211,7 @@ class BasicAudioModule {
       }
     }
 
-    // Ask how many folders there are under the root folders on the current
+    // Ask how many folders there are under the root folder on the current
     // source device.
     void queryFolderCount() { sendQuery(MID_FOLDERCOUNT); }
 
@@ -253,6 +241,13 @@ class BasicAudioModule {
     // Hook `onFirmwareVersion` for the result.  Catalex doesn't respond
     // to this query, so watch for a timeout error.
     void queryFirmwareVersion() { sendQuery(MID_FIRMWAREVERSION); }
+
+    static constexpr uint16_t combine(uint8_t hi, uint8_t lo) {
+      return static_cast<uint16_t>(hi << 8) | lo;
+    }
+    
+    static constexpr uint8_t high(uint16_t x) { return x >> 8; }
+    static constexpr uint8_t low(uint16_t x)  { return x & 0xFF; }
 
   protected:
     // These are the message IDs (sometimes called commands) for the
@@ -488,8 +483,8 @@ class BasicAudioModule {
     // when a track finishes playing on its own.
     //
     // This hook does not trigger when an inserted track finishes.
-    // If you need to know that, you can try watching from the
-    // brief blink on the BUSY pin of the DF Player Mini.
+    // If you need to know that, you can try watching for a brief
+    // blink on the BUSY pin of the DF Player Mini.
     void onFinishedFile(Device device, uint16_t file_index) {
       Serial.print(F("Finished playing file: "));
       printDeviceName(device);
@@ -706,8 +701,8 @@ class BasicAudioModule {
       State *onEvent(
           BasicAudioModule *module,
           MsgID msgid,
-          uint8_t /*paramHi*/,
-          uint8_t /*paramLo*/
+          uint8_t paramHi,
+          uint8_t paramLo
       ) override {
         switch (msgid) {
           case MID_ENTERSTATE:
@@ -718,6 +713,11 @@ class BasicAudioModule {
             return this;
           case MID_INITCOMPLETE:
             return &BasicAudioModule::s_init_getting_version;
+          case MID_ERROR:
+            if (combine(paramHi, paramLo) == EC_TIMEDOUT) {
+              Serial.println(F("No response from audio module"));
+            }
+            return nullptr;
           default: break;
         }
         return this;
@@ -842,14 +842,14 @@ class BasicAudioModule {
             return this;
           case MID_FOLDERCOUNT:
             module->m_folders = paramLo;
-            Serial.println(F("Software initialization complete.\bSelected: "));
+            Serial.println(F("Audio module initialized.\nSelected: "));
             module->printDeviceName(module->m_source);
             Serial.print(F(" with "));
             Serial.print(module->m_files);
             Serial.print(F(" files and "));
             Serial.print(module->m_folders);
             Serial.println(F(" folders"));
-            return &s_init_start_playing;
+            return nullptr;
           default: break;
         }
         return this;
