@@ -14,9 +14,11 @@
 #include "parser.h"
 
 // Devices
-SoftwareSerial serial_for_audio(11, 10);
+auto serial_for_audio = SoftwareSerial(11, 10);
 auto audio_board = make_AudioModule(serial_for_audio);
 auto frequency_analyzer = MSGEQ7(12, 13, A0);
+
+constexpr int bar_segments[5] = {6, 7, 8, 9, A1 };
 
 CommandBuffer<32> command;
 auto parser = Parser(audio_board);
@@ -34,7 +36,13 @@ void setup() {
 //  lcd.print(F("Initializing..."));
 
   audio_board.begin();
+  frequency_analyzer.begin();
   command.begin();
+
+  for (auto i : bar_segments) {
+    pinMode(i, OUTPUT);
+    digitalWrite(i, LOW);
+  }
   
 //  lcd.moveTo(1, 0);
 //  lcd.print(F("Ready.          "));
@@ -43,9 +51,19 @@ void setup() {
 void loop() {
   audio_board.update();
   frequency_analyzer.update();
+
+  const auto value = frequency_analyzer[1];
+  digitalWrite(bar_segments[4], value > 768 ? HIGH : LOW); // loud thunder
+  digitalWrite(bar_segments[3], value > 384 ? HIGH : LOW); // thunder
+  digitalWrite(bar_segments[2], value > 192 ? HIGH : LOW);
+  digitalWrite(bar_segments[1], value >  96 ? HIGH : LOW);
+  digitalWrite(bar_segments[0], value >  48 ? HIGH : LOW);  // registers noise when nothing playing
+  
 //  lcd.update();
 
   if (command.available()) {
-    parser.parse(command);
+    if (!parser.parse(command)) {
+      Serial.println("Command not recognized.");
+    }
   }
 }

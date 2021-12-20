@@ -6,9 +6,29 @@ class Parser {
     bool parse(const char *buf) {
       m_p = buf;
       switch (parseKeyword()) {
+        case KW_BASS:
+          m_audio.selectEQ(MyAudioModule::EQ_BASS);
+          return true;
+        case KW_CLASSICAL:
+          m_audio.selectEQ(MyAudioModule::EQ_CLASSICAL);
+          return true;
         case KW_EQ:
           if (Accept('?')) {
             m_audio.queryEQ();
+            return true;
+          }
+          if (Accept('=')) {
+            auto eq = MyAudioModule::EQ_NORMAL;
+            switch (parseKeyword()) {
+              case KW_BASS:       eq = MyAudioModule::EQ_BASS;      break;
+              case KW_CLASSICAL:  eq = MyAudioModule::EQ_CLASSICAL; break;
+              case KW_JAZZ:       eq = MyAudioModule::EQ_NORMAL;    break;
+              case KW_NORMAL:     eq = MyAudioModule::EQ_NORMAL;    break;
+              case KW_POP:        eq = MyAudioModule::EQ_NORMAL;    break;
+              case KW_ROCK:       eq = MyAudioModule::EQ_NORMAL;    break;
+              default: return false;
+            }
+            m_audio.selectEQ(eq);
             return true;
           }
           break;
@@ -19,8 +39,14 @@ class Parser {
             return true;
           }
           break;
+        case KW_JAZZ:
+          m_audio.selectEQ(MyAudioModule::EQ_JAZZ);
+          return true;
         case KW_NEXT:
           m_audio.playNextFile();
+          return true;
+        case KW_NORMAL:
+          m_audio.selectEQ(MyAudioModule::EQ_NORMAL);
           return true;
         case KW_PAUSE:
           m_audio.pause();
@@ -44,6 +70,9 @@ class Parser {
           }
           return false;
         }
+        case KW_POP:
+          m_audio.selectEQ(MyAudioModule::EQ_POP);
+          return true;
         case KW_PREVIOUS:
           m_audio.playPreviousFile();
           return true;
@@ -52,6 +81,9 @@ class Parser {
           return true;
         case KW_RESET:
           m_audio.reset();
+          return true;
+        case KW_ROCK:
+          m_audio.selectEQ(MyAudioModule::EQ_ROCK);
           return true;
         case KW_SDCARD: return parseDeviceQuery(MyAudioModule::DEV_SDCARD);
         case KW_SELECT:
@@ -120,12 +152,12 @@ class Parser {
       }
       return false;
     }
-  
+
     enum Keyword {
-      KW_UNKNOWN, KW_COUNT, KW_EQ, KW_FILE, KW_FLASH, KW_FOLDER,
-      KW_LOOP, KW_NEXT, KW_PAUSE, KW_PLAY, KW_PREVIOUS, KW_RANDOM,
-      KW_RESET, KW_SDCARD, KW_SELECT, KW_SEQ, KW_STATUS, KW_STOP,
-      KW_UNPAUSE, KW_USB, KW_VOLUME
+      KW_UNKNOWN, KW_BASS, KW_CLASSICAL, KW_COUNT, KW_EQ, KW_FILE, KW_FLASH,
+      KW_FOLDER, KW_JAZZ, KW_LOOP, KW_NEXT, KW_NORMAL, KW_PAUSE, KW_PLAY,
+      KW_POP, KW_PREVIOUS, KW_RANDOM, KW_RESET, KW_ROCK, KW_SDCARD, KW_SELECT,
+      KW_SEQ, KW_STATUS, KW_STOP, KW_UNPAUSE, KW_USB, KW_VOLUME
     };
 
     Keyword parseKeyword() {
@@ -138,7 +170,11 @@ class Parser {
       // program memory.  Believe it or not, the variadic template
       // for AllowSuffix actually reduces the amount of code
       // generated versus a completely hand-rolled expression.
-      if (Accept('c')) return AllowSuffix(KW_COUNT, 'o', 'u', 'n', 't');
+      if (Accept('b')) return AllowSuffix(KW_BASS, 'a', 's', 's');
+      if (Accept('c')) {
+        if (Accept('l')) return AllowSuffix(KW_CLASSICAL, 'a', 's', 's', 'i', 'c', 'a', 'l');
+        if (Accept('o')) return AllowSuffix(KW_COUNT, 'u', 'n', 't');
+      }
       if (Accept('e')) return AllowSuffix(KW_EQ, 'q');
       if (Accept('f')) {
         if (Accept('i')) return AllowSuffix(KW_FILE, 'l', 'e');
@@ -146,17 +182,24 @@ class Parser {
         if (Accept('o')) return AllowSuffix(KW_FOLDER, 'l', 'd', 'e', 'r');
         return KW_UNKNOWN;
       }
+      if (Accept('j')) return AllowSuffix(KW_JAZZ, 'a', 'z', 'z');
       if (Accept('l')) return AllowSuffix(KW_LOOP, 'o', 'o', 'p');
-      if (Accept('n')) return AllowSuffix(KW_NEXT, 'e', 'x', 't');
+      if (Accept('n')) {
+        if (Accept('e')) return AllowSuffix(KW_NEXT, 'x', 't');
+        if (Accept('o')) return AllowSuffix(KW_NORMAL, 'r', 'm', 'a', 'l');
+        return KW_UNKNOWN;
+      }
       if (Accept('p')) {
         if (Accept('a')) return AllowSuffix(KW_PAUSE, 'u', 's', 'e');
         if (Accept('l')) return AllowSuffix(KW_PLAY, 'a', 'y');
+        if (Accept('o')) return AllowSuffix(KW_POP, 'p');
         if (Accept('r')) return AllowSuffix(KW_PREVIOUS, 'e', 'v', 'i', 'o', 'u', 's');
         return KW_UNKNOWN;
       }
       if (Accept('r')) {
         if (Accept('a')) return AllowSuffix(KW_RANDOM, 'n', 'd', 'o', 'm');
         if (Accept('e')) return AllowSuffix(KW_RESET, 's', 'e', 't');
+        if (Accept('o')) return AllowSuffix(KW_ROCK, 'c', 'k');
         return KW_UNKNOWN;
       }
       if (Accept('s')) {
