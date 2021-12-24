@@ -54,8 +54,12 @@ class RotaryEncoder {
       m_raw_count += delta;
       if (m_red   != 0) digitalWrite(m_red,   delta < 0 ? HIGH : LOW);
       if (m_green != 0) digitalWrite(m_green, delta > 0 ? HIGH : LOW);
-      return (delta != 0) &&
-        ((m_counts_per_detent >= 4) || (m_raw_count % (4/m_counts_per_detent)) == 0);
+      if (delta == 0) return false;
+      switch (m_counts_per_detent % 4) {
+        case 0: return true;
+        case 2: return m_raw_count % 2 == 0;
+        default: return m_raw_count % 4 == 0;
+      }
     }
 
     private:
@@ -68,7 +72,7 @@ class RotaryEncoder {
       int m_a, m_b;
       int m_button;
       int m_red, m_green;
-      int8_t m_counts_per_detent;
+      uint8_t m_counts_per_detent;
       uint8_t m_state;
       int m_raw_count;
 };

@@ -12,13 +12,15 @@
 #include "motion.h"       // PIR motion sensor
 #include "msgeq07.h"      // graphic equalizer chip
 #include "parser.h"
+#include "rotaryencoder.h"
 
 // Devices
 auto serial_for_audio = SoftwareSerial(11, 10);
 auto audio_board = make_AudioModule(serial_for_audio);
 auto frequency_analyzer = MSGEQ7(12, 13, A0);
+auto rotary_encoder = RotaryEncoder(4, 5, 6, 2, 3);
 
-constexpr int bar_segments[5] = {6, 7, 8, 9, A1 };
+constexpr int bar_segments[2] = { 9, 8 };
 
 CommandBuffer<32> command;
 auto parser = Parser(audio_board);
@@ -38,6 +40,7 @@ void setup() {
   audio_board.begin();
   frequency_analyzer.begin();
   command.begin();
+  rotary_encoder.begin();
 
   for (auto i : bar_segments) {
     pinMode(i, OUTPUT);
@@ -53,13 +56,15 @@ void loop() {
   frequency_analyzer.update();
 
   const auto value = frequency_analyzer[1];
-  digitalWrite(bar_segments[4], value > 768 ? HIGH : LOW); // loud thunder
-  digitalWrite(bar_segments[3], value > 384 ? HIGH : LOW); // thunder
-  digitalWrite(bar_segments[2], value > 192 ? HIGH : LOW);
-  digitalWrite(bar_segments[1], value >  96 ? HIGH : LOW);
-  digitalWrite(bar_segments[0], value >  48 ? HIGH : LOW);  // registers noise when nothing playing
+  digitalWrite(bar_segments[0], value > 768 ? HIGH : LOW); // loud thunder
+  digitalWrite(bar_segments[1], value > 384 ? HIGH : LOW); // thunder
   
 //  lcd.update();
+
+  if (rotary_encoder.update()) {
+    Serial.print("Turned: ");
+    Serial.println(rotary_encoder.count());
+  }
 
   if (command.available()) {
     if (!parser.parse(command)) {
