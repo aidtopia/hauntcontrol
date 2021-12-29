@@ -19,23 +19,40 @@ auto serial_for_audio = SoftwareSerial(11, 10);
 auto audio_board = make_AudioModule(serial_for_audio);
 auto frequency_analyzer = MSGEQ7(12, 13, A0);
 auto rotary_encoder = RotaryEncoder(4, 5, 6, 2, 3);
+auto serial_for_lcd = SoftwareSerial(A2, A3);
+auto lcd = make_LCD(serial_for_lcd);
 
 constexpr int bar_segments[2] = { 9, 8 };
 
 CommandBuffer<32> command;
 auto parser = Parser(audio_board);
 
+static void Format(int x, char *buffer, size_t size) {
+  if (size == 0) return;
+  auto i = size;
+  buffer[--i] = '\0';
+  if (x == 0) {
+    buffer[--i] = '0';
+  } else {
+    const size_t neg = x < 0 ? 1 : 0;
+    if (neg) x = -x;
+    while (i > neg && x != 0) {
+      buffer[--i] = '0' + x%10;
+      x /= 10;
+    }
+    if (neg) buffer[--i] = '-';
+  }
+  while (i > 0) buffer[--i] = ' ';
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Haunt Control by Hayward Haunter"));
   Serial.println(F("Copyright 2021 Adrian McCarthy"));
 
-  Serial.print(F("Clock frequency: "));
-  Serial.println(F_CPU);
-
-//  lcd.begin();
-//  lcd.println(F("Haunt Control"));
-//  lcd.print(F("Initializing..."));
+  lcd.begin();
+  lcd.println(F("Haunt Control"));
+  lcd.print(F("Initializing..."));
 
   audio_board.begin();
   frequency_analyzer.begin();
@@ -47,8 +64,8 @@ void setup() {
     digitalWrite(i, LOW);
   }
   
-//  lcd.moveTo(1, 0);
-//  lcd.print(F("Ready.          "));
+  lcd.moveTo(1, 0);
+  lcd.print(F("Ready.          "));
 }
 
 void loop() {
@@ -59,11 +76,15 @@ void loop() {
   digitalWrite(bar_segments[0], value > 768 ? HIGH : LOW); // loud thunder
   digitalWrite(bar_segments[1], value > 384 ? HIGH : LOW); // thunder
   
-//  lcd.update();
+  lcd.update();
 
   if (rotary_encoder.update()) {
-    Serial.print("Turned: ");
-    Serial.println(rotary_encoder.count());
+    lcd.moveTo(1, 0);
+    lcd.print("Knob: ");
+    lcd.moveTo(1, 6);
+    char buf[6];
+    Format(rotary_encoder.count(), buf, sizeof(buf));
+    lcd.print(buf);
   }
 
   if (command.available()) {
