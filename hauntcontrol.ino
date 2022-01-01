@@ -27,14 +27,16 @@ constexpr int bar_segments[2] = { 9, 8 };
 CommandBuffer<32> command;
 auto parser = Parser(audio_board);
 
-static void Format(int x, char *buffer, size_t size) {
-  if (size == 0) return;
-  auto i = size;
+void Format(int x, char *buffer, size_t N) {
+//  static_assert(N > 0, "cannot format to empty buffer");
+  if (N == 0) return;
+  size_t i = N;
   buffer[--i] = '\0';
+  if (i == 0) return;
   if (x == 0) {
     buffer[--i] = '0';
   } else {
-    const size_t neg = x < 0 ? 1 : 0;
+    const unsigned neg = x < 0 ? 1 : 0;
     if (neg) x = -x;
     while (i > neg && x != 0) {
       buffer[--i] = '0' + x%10;
@@ -70,8 +72,8 @@ void setup() {
 
 void loop() {
   audio_board.update();
-  frequency_analyzer.update();
 
+  frequency_analyzer.update();
   const auto value = frequency_analyzer[1];
   digitalWrite(bar_segments[0], value > 768 ? HIGH : LOW); // loud thunder
   digitalWrite(bar_segments[1], value > 384 ? HIGH : LOW); // thunder
