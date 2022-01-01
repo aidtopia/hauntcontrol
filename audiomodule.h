@@ -521,6 +521,7 @@ class BasicAudioModule {
     }
 
     void onMessageReceived(const Message &msg) {
+#if 0
       const auto *buf = msg.getBuffer();
       const auto len = msg.getLength();
       Serial.print(F("Received:"));
@@ -529,6 +530,7 @@ class BasicAudioModule {
         Serial.print(buf[i], HEX);
       }
       Serial.println();
+#endif
 
       switch (msg.getMessageID()) {
         case 0x3A: {
@@ -602,13 +604,15 @@ class BasicAudioModule {
       }
     }
 
-    void onMessageSent(const uint8_t *buf, int len) {
+    void onMessageSent(const uint8_t * /* buf */, int /* len */) {
+#if 0
       Serial.print(F("Sent:    "));
       for (int i = 0; i < len; ++i) {
         Serial.print(F(" "));
         Serial.print(buf[i], HEX);
       }
       Serial.println();
+#endif
     }
 
     void onPlaybackSequence(Sequence seq) {
@@ -842,7 +846,7 @@ class BasicAudioModule {
             return this;
           case MID_FOLDERCOUNT:
             module->m_folders = paramLo;
-            Serial.println(F("Audio module initialized.\nSelected: "));
+            Serial.print(F("Audio module initialized.\nSelected: "));
             module->printDeviceName(module->m_source);
             Serial.print(F(" with "));
             Serial.print(module->m_files);
@@ -946,7 +950,7 @@ class AudioModule : public BasicAudioModule {
       BasicAudioModule(serial), m_serial(serial) {}
 
     // Initialization to be done during `setup`.
-    void begin() {
+    void begin() override {
       m_serial.begin(9600);
       BasicAudioModule::begin();
     }
