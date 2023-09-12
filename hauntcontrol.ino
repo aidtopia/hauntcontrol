@@ -8,6 +8,7 @@
 
 #include "audiomodule.h"  // Catalex or DFPlayer Mini audio player
 #include "commandbuffer.h"
+#include "fogger.h"
 #include "lcd_display.h"  // LCD character display
 #include "motion.h"       // PIR motion sensor
 #include "msgeq07.h"      // graphic equalizer chip
@@ -21,11 +22,12 @@ auto frequency_analyzer = MSGEQ7(12, 13, A0);
 auto rotary_encoder = RotaryEncoder(4, 5, 6, 2, 3);
 auto serial_for_lcd = SoftwareSerial(A2, A3);
 auto lcd = make_LCD(serial_for_lcd);
+auto fogger = Fogger(7, HIGH);
 
-constexpr int bar_segments[2] = { 9, 8 };
+int constexpr bar_segments[2] = { 9, 8 };
 
 CommandBuffer<32> command;
-auto parser = Parser(audio_board);
+auto parser = Parser(audio_board, &fogger);
 
 void Format(int x, char *buffer, size_t N) {
 //  static_assert(N > 0, "cannot format to empty buffer");
@@ -57,6 +59,7 @@ void setup() {
   lcd.print(F("Initializing..."));
 
   audio_board.begin();
+  fogger.begin();
   frequency_analyzer.begin();
   command.begin();
   rotary_encoder.begin();
@@ -72,6 +75,7 @@ void setup() {
 
 void loop() {
   audio_board.update();
+  fogger.update();
 
   frequency_analyzer.update();
   const auto value = frequency_analyzer[1];

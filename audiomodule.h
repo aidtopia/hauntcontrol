@@ -399,6 +399,7 @@ class BasicAudioModule {
         }
 
       private:
+        // Sums the bytes used to compute the Message's checksum.
         uint16_t sum() const {
           uint16_t s = 0;
           for (int i = 1; i <= LENGTH; ++i) {
@@ -924,9 +925,14 @@ class BasicAudioModule {
     }
 
     void setState(State *new_state, uint8_t arg1 = 0, uint8_t arg2 = 0) {
-      if (m_state != new_state) {
+      const auto original_state = m_state;
+      while (m_state != new_state) {
         m_state = new_state;
-        if (m_state) m_state->onEvent(this, MID_ENTERSTATE, arg1, arg2);
+        if (m_state) {
+          new_state = m_state->onEvent(this, MID_ENTERSTATE, arg1, arg2);
+        }
+        // break out of a cycle
+        if (m_state == original_state) return;
       }
     }
 

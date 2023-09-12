@@ -1,7 +1,8 @@
 class Parser {
   public:
     using MyAudioModule = BasicAudioModule;
-    explicit Parser(MyAudioModule &audio) : m_audio(audio), m_p(nullptr) {}
+    explicit Parser(MyAudioModule &audio, Fogger *fogger = nullptr) :
+      m_audio(audio), m_fogger(fogger), m_p(nullptr) {}
 
     bool parse(const char *buf) {
       m_p = buf;
@@ -33,6 +34,11 @@ class Parser {
           }
           break;
         case KW_FLASH: return parseDeviceQuery(MyAudioModule::DEV_FLASH);
+        case KW_FOG: {
+          auto duration = parseUnsigned();
+          if (m_fogger) m_fogger->on(1000*duration);
+          return true;
+        }
         case KW_FOLDER:
           if (parseKeyword() == KW_COUNT && Accept('?')) {
             m_audio.queryFolderCount();
@@ -155,9 +161,9 @@ class Parser {
 
     enum Keyword {
       KW_UNKNOWN, KW_BASS, KW_CLASSICAL, KW_COUNT, KW_EQ, KW_FILE, KW_FLASH,
-      KW_FOLDER, KW_JAZZ, KW_LOOP, KW_NEXT, KW_NORMAL, KW_PAUSE, KW_PLAY,
-      KW_POP, KW_PREVIOUS, KW_RANDOM, KW_RESET, KW_ROCK, KW_SDCARD, KW_SELECT,
-      KW_SEQ, KW_STATUS, KW_STOP, KW_UNPAUSE, KW_USB, KW_VOLUME
+      KW_FOG, KW_FOLDER, KW_JAZZ, KW_LOOP, KW_NEXT, KW_NORMAL, KW_PAUSE,
+      KW_PLAY, KW_POP, KW_PREVIOUS, KW_RANDOM, KW_RESET, KW_ROCK, KW_SDCARD,
+      KW_SELECT, KW_SEQ, KW_STATUS, KW_STOP, KW_UNPAUSE, KW_USB, KW_VOLUME
     };
 
     Keyword parseKeyword() {
@@ -174,12 +180,17 @@ class Parser {
       if (Accept('c')) {
         if (Accept('l')) return AllowSuffix(KW_CLASSICAL, 'a', 's', 's', 'i', 'c', 'a', 'l');
         if (Accept('o')) return AllowSuffix(KW_COUNT, 'u', 'n', 't');
+        return KW_UNKNOWN;
       }
       if (Accept('e')) return AllowSuffix(KW_EQ, 'q');
       if (Accept('f')) {
         if (Accept('i')) return AllowSuffix(KW_FILE, 'l', 'e');
         if (Accept('l')) return AllowSuffix(KW_FLASH, 'a', 's', 'h');
-        if (Accept('o')) return AllowSuffix(KW_FOLDER, 'l', 'd', 'e', 'r');
+        if (Accept('o')) {
+          if (Accept('g')) return KW_FOG;
+          if (Accept('l')) return AllowSuffix(KW_FOLDER, 'd', 'e', 'r');
+          return KW_UNKNOWN;
+        }
         return KW_UNKNOWN;
       }
       if (Accept('j')) return AllowSuffix(KW_JAZZ, 'a', 'z', 'z');
@@ -262,5 +273,6 @@ class Parser {
     }
 
     MyAudioModule &m_audio;
+    Fogger *m_fogger;
     const char *m_p;
 };
