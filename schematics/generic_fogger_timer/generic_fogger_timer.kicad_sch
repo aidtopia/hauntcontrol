@@ -5,9 +5,9 @@
   (paper "USLetter")
 
   (title_block
-    (title "Generic Fog Machine Timer")
+    (title "Common Fog Machine Timer")
     (comment 1 "FWC-4B.PCB Rev 3")
-    (comment 2 "Schematic for educational purposes only")
+    (comment 2 "To understand how to interface to common \"party-store\" consumer fog machines.")
   )
 
   (lib_symbols
