@@ -14,8 +14,7 @@
 //
 // * An air regulator from FrightProps.com with 1/4" NPT fittings.  The
 //   original instructions suggested 20-25 psi.
-// * A 12-volt 3-way solenoid valve with 1/4" NPT ports from U.S. Solid
-//   to control the original cylinder.
+// * A 12-volt 3-way solenoid valve with 1/4" NPT ports from U.S. Solid.
 //   I crimped ferrule terminals to the wire ends of a DC barrel connector
 //   pigtail along with a 1N4001 diode reverse biased to handle the back EMF
 //   from the solenoid.  Once I determined the polarity of the LED soldered
@@ -29,7 +28,7 @@
 // * A MOSFET module acts as the switch for the solendoid power.  The module
 //   is overkill, but cheap and simple.  The Arduino runs the solenoid from
 //   digital pin 9.
-// * The Arduino expects a logic high on digital pin 2 from any sort of motion
+// * The Arduino expects a logic high on a digital pin from any sort of motion
 //   sensor.  I experimented with a microwave doppler radar sensor, which is
 //   probably similar to the original motion detector.  But the detection area
 //   is very large and hard to control, so I'll probably complete it with a
@@ -46,8 +45,8 @@ long constexpr suspense_time = 1000;
 
 // After the suspense_time, the coffin will knock randomly for a total amount of
 // time in this range.
-long constexpr min_run_time =  5000;
-long constexpr max_run_time = 15000;
+long constexpr min_run_time =  3000;
+long constexpr max_run_time = 10000;
 
 // Each knock will engage the solenoid for a random time in this range.
 long constexpr min_knock_time = 100;
@@ -60,6 +59,21 @@ long constexpr max_noknock_time = 900;
 // After the sequence plays, we lock out re-triggering to discourage folks
 // lingering to see it again.
 long constexpr lockout_time = 3000;
+
+
+enum class State {
+  waiting,
+  suspense,
+  playing,
+  lockout
+} state = State::waiting;
+
+// timeout is the time the next state change should occur (millis).
+unsigned long timeout = 0;
+
+bool knock_on = false;
+unsigned long knock_timeout = 0;
+
 
 static long pick_time(long low, long high) {
   return random(low, high);
@@ -74,24 +88,11 @@ void setup() {
   pinMode(trigger_pin, INPUT);
   while (!Serial) {}  // not necessary for Pro Mini, but no harm
   Serial.println(F("\nCoffin Knocker"));
-  int seed = analogRead(3);
+  int seed = analogRead(A0);
   Serial.print(F("Random Seed: "));
   Serial.println(seed);
   randomSeed(seed);
 }
-
-enum class State {
-  waiting,
-  suspense,
-  playing,
-  lockout
-} state = State::waiting;
-
-// timeout is the time the next state change should occur (millis).
-unsigned long timeout = 0;
-
-bool knock_on = false;
-unsigned long knock_timeout = 0;
 
 void loop() {
   // The onboard LED always shows the current state of the motion sensor.
