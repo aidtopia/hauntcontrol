@@ -147,7 +147,8 @@ enum class State {
   // The normal operating states...
   waiting,
   suspense,
-  playing,
+  knock_on,
+  knock_off,
   lockout,
 
   // Meta states...
@@ -157,7 +158,6 @@ enum class State {
 // timeout is the time the next state change should occur (millis).
 unsigned long timeout = 0;
 
-bool knock_on = false;
 unsigned long knock_timeout = 0;
 
 static long eat_input() {
@@ -181,7 +181,6 @@ void setup() {
   Serial.print(F("Random Seed: "));
   Serial.println(seed);
   randomSeed(seed);
-  knock_on = false;
   state = State::initializing;
 }
 
@@ -191,9 +190,16 @@ void loop() {
   int const trigger = digitalRead(trigger_pin);
   digitalWrite(LED_BUILTIN, trigger);
 
+  // Serial input always takes us to the programming state.
+  if (Serial.available() && state != State::programming) {
+    Serial.println(F("Programming Mode"));
+    state = State::programming;
+  }
+
   // We set the solenoid output every time through the loop, not just when
-  // it changes.
-  digitalWrite(solenoid_pin, knock_on ? HIGH : LOW);
+  // it changes.  This ensures we de-energize the solenoid valve if there's
+  // ever an unexpected state change.
+  digitalWrite(solenoid_pin, state == State::knock_on ? HIGH : LOW);
 
   unsigned long const now = millis();
 
@@ -221,10 +227,6 @@ void loop() {
     }
 
     case State::waiting: {
-      if (Serial.available()) {
-        state = State::programming;
-        break;
-      }
       if (trigger == HIGH) {
         timeout = now + timing.suspense_time;
         state = State::suspense;
@@ -235,10 +237,6 @@ void loop() {
     }
 
     case State::suspense: {
-      if (Serial.available()) {
-        state = State::programming;
-        break;
-      }
       if (now >= timeout) {
         if (trigger == LOW) {
           // This won't ever happen if the suspense_time is less than the
@@ -250,7 +248,7 @@ void loop() {
           long const run_time = pick_time(timing.min_run_time, timing.max_run_time);
           timeout = now + run_time;
           knock_timeout = now;
-          state = State::playing;
+          state = State::knock_off;
           Serial.print(now);
           Serial.println(F(" Animating!"));
         }
@@ -258,14 +256,8 @@ void loop() {
       break;
     }
 
-    case State::playing: {
-      if (Serial.available()) {
-        knock_on = false;
-        state = State::programming;
-        break;
-      }
+    case State::knock_on: {
       if (now >= timeout) {
-        knock_on = false;
         timeout = now + timing.lockout_time;
         state = State::lockout;
         Serial.print(now);
@@ -273,26 +265,32 @@ void loop() {
         break;
       }
       if (now >= knock_timeout) {
-        if (knock_on) {
-          knock_on = false;
-          long const noknock_time = pick_time(timing.min_noknock_time, timing.max_noknock_time);
-          knock_timeout = now + noknock_time;
-        } else {
-          knock_on = true;
-          long const knock_time = pick_time(timing.min_knock_time, timing.max_knock_time);
-          knock_timeout = now + knock_time;
-          Serial.print(now);
-          Serial.println(F(" Bang!"));
-        }
+        long const noknock_time = pick_time(timing.min_noknock_time, timing.max_noknock_time);
+        knock_timeout = now + noknock_time;
+        state = State::knock_off;
+      }
+      break;
+    }
+
+    case State::knock_off: {
+      if (now >= timeout) {
+        timeout = now + timing.lockout_time;
+        state = State::lockout;
+        Serial.print(now);
+        Serial.println(F(" Lockout"));
+        break;
+      }
+      if (now >= knock_timeout) {
+        long const knock_time = pick_time(timing.min_knock_time, timing.max_knock_time);
+        knock_timeout = now + knock_time;
+        state = State::knock_on;
+        Serial.print(now);
+        Serial.println(F(" Bang!"));
       }
       break;
     }
 
     case State::lockout: {
-      if (Serial.available()) {
-        state = State::programming;
-        break;
-      }
       if (now >= timeout) {
         state = State::waiting;
         Serial.print(now);
@@ -302,14 +300,9 @@ void loop() {
     }
 
     case State::programming: {
-      eat_input();
-      Serial.println(F("\nProgramming Mode"));
-      Serial.print(F("(L)ist, reset to (D)efaults, (S)ave, (R)un: "));
-      int ch;
-      do {
-        while (!Serial.available()) { delay(10); }
-        ch = Serial.read();
-      } while (ch == '\n' || ch == '\r' || ch == ' ' || ch == '\t');
+      if (!Serial.available()) break;
+      int ch = Serial.read();
+      if (ch == '\n' || ch == '\r' || ch == ' ' || ch == '\t') break;
       if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 'A';
       if (' ' < ch && ch < 127) Serial.println((char) ch); else Serial.println(ch);
 
@@ -327,15 +320,17 @@ void loop() {
             Serial.println(F("Could not save settings to EEPROM."));
           }
           break;
-        case 'R': case '\x1B':
+        case 'R':
           state = timing.sane() ? State::waiting : State::initializing;
-          break;
-        default:
           break;
       }
       eat_input();
+      if (state == State::programming) {
+        Serial.print(F("(L)ist, restore (D)efaults, (S)ave, (R)un: "));
+      }
       if (state == State::waiting) {
         Serial.println(F("Waiting..."));
+        eat_input();  // seems redundant, but it makes a difference
       }
       break;
     }
