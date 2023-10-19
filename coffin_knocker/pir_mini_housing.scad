@@ -129,9 +129,9 @@ module PIR_housing(nozzle_d=0.4) {
 
     spacing = body_d + 1;
     translate([0, spacing, 0]) body();
-    //translate([-spacing, 0, 0]) cap(thread_l+2*th);
-    //translate([0, 0, 0])        cap(thread_l+th);
-    //translate([ spacing, 0, 0]) cap(thread_l+3*th);
+    translate([-spacing, 0, 0]) cap(thread_l+2*th);
+    translate([0, 0, 0])        cap(thread_l+th);
+    translate([ spacing, 0, 0]) cap(thread_l+3*th);
 }
 
 PIR_housing();
