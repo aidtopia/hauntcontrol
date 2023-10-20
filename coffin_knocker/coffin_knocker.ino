@@ -79,53 +79,27 @@ class CommandBuffer {
     int buflen = 0;
 };
 
+template <int COUNT, int MAGIC, int VERSION>
 class Parameters {
   public:
-    // The suspense time is how long (in milliseconds) after motion is detected
-    // the action should begin.  A short delay after motion is detected may
-    // help in surprising victims, but this can be set to 0.
-    long suspense_time() const {
-      return get(SUSPENSE_TIME);
-    }
-
-    // After the suspense time, the coffin will knock randomly for the
-    // run time, which is selected randomly from a range.
-    long random_run_time() const {
-      return random(get(MIN_RUN_TIME), get(MAX_RUN_TIME));
-    }
-
-    // Each knock consists of a random on time...
-    long random_knock_on_time() const {
-      return random(get(MIN_KNOCK_ON_TIME), get(MAX_KNOCK_ON_TIME));
-    }
-    // ...followed by an off time.
-    long random_knock_off_time() const {
-      return random(get(MIN_KNOCK_OFF_TIME), get(MAX_KNOCK_OFF_TIME));
-    }
-
-    // After a sequence, motion triggers are ignored for the lockout time.
-    long lockout_time() const {
-      return get(LOCKOUT_TIME);
-    }
-
     bool load_defaults() {
-      m_version = current_version;
-      set(SUSPENSE_TIME,         0);
-      set(MIN_RUN_TIME,       2500);
-      set(MAX_RUN_TIME,       6000);
-      set(MIN_KNOCK_ON_TIME,   200);
-      set(MAX_KNOCK_ON_TIME,   400);
-      set(MIN_KNOCK_OFF_TIME,  200);
-      set(MAX_KNOCK_OFF_TIME,  900);
-      set(LOCKOUT_TIME,       6000);
+      memset(m_values, 0, sizeof(m_values));
+      if (!do_load_defaults()) {
+        return false;
+      }
+      m_version = VERSION;
       return true;
+    }
+
+    bool sane() const {
+      return (m_version == VERSION) && do_sane();
     }
 
     bool load_from_eeprom(int base_address = 0) {
       auto addr = base_address;
       int signature = 0;
       EEPROM.get(addr, signature); addr += sizeof(signature);
-      if (signature != magic) return false;  // never been saved
+      if (signature != MAGIC) return false;  // never been saved
 
       EEPROM.get(addr, m_version); addr += sizeof(m_version);
       if (m_version <= 0) return false;
@@ -135,12 +109,12 @@ class Parameters {
         *p++ = EEPROM.read(addr++);
       }
 
-      return m_version == current_version;
+      return m_version == VERSION;
     }
 
     bool save_to_eeprom(int base_address = 0) const {
       auto addr = base_address;
-      auto const signature = magic;
+      auto const signature = MAGIC;
       EEPROM.put(addr, signature); addr += sizeof(signature);
       EEPROM.put(addr, m_version); addr += sizeof(m_version);
       auto const *p = reinterpret_cast<uint8_t const *>(m_values);
@@ -152,60 +126,29 @@ class Parameters {
 
     void clear_eeprom(int base_address = 0) {
       // All we have to do is wipe out the magic number.
-      auto const signature = (magic == 0) ? 1 : 0;
+      int const signature = !MAGIC;
       EEPROM.put(base_address, signature);
     }
 
-    bool sane() const {
-      unsigned long constexpr one_minute = 60 * 1000;
-      if (m_version != current_version) return false;
-      if (get(SUSPENSE_TIME) < 0 || one_minute < get(SUSPENSE_TIME)) return false;
-      if (get(MIN_RUN_TIME) < 1000) return false;
-      if (get(MAX_RUN_TIME) < get(MIN_RUN_TIME) || one_minute < get(MAX_RUN_TIME)) return false;
-      if (get(MIN_KNOCK_ON_TIME) < 200) return false;
-      if (get(MAX_KNOCK_ON_TIME) < get(MIN_KNOCK_ON_TIME) || one_minute < get(MAX_KNOCK_ON_TIME)) return false;
-      if (get(MIN_KNOCK_OFF_TIME) < 200) return false;
-      if (get(MAX_KNOCK_OFF_TIME) < get(MIN_KNOCK_OFF_TIME) || one_minute < get(MAX_KNOCK_OFF_TIME)) return false;
-      if (get(LOCKOUT_TIME) < 0 || one_minute < get(LOCKOUT_TIME)) return false;
-      return true;
+    void print_name(int i) {
+      do_print_name(i);
     }
 
     void show() const {
       for (int i = 0; i < COUNT; ++i) {
         Serial.print(F(" "));
-        Serial.print(i+1);
-        Serial.print(F(". "));
-        char buffer[32] = "";
-        load_name(i, buffer);
-        Serial.print(buffer);
+        print_name(i);
         Serial.print(F(" = "));
         Serial.println(m_values[i]);
       }
     }
 
-  private:
-    enum Index {
-      // VERSION 1
-      SUSPENSE_TIME,
-      MIN_RUN_TIME,
-      MAX_RUN_TIME,
-      MIN_KNOCK_ON_TIME,
-      MAX_KNOCK_ON_TIME,
-      MIN_KNOCK_OFF_TIME,
-      MAX_KNOCK_OFF_TIME,
-      LOCKOUT_TIME,
-
-      // FUTURE VERSIONS ADD INDEXES HERE
-
-      // TOTAL NUMBER OF PARAMETERS
-      COUNT
-    };
-
-    long get(Index i) const {
+  protected:
+    long get_by_index(int i) const {
       return (0 <= i && i < COUNT) ? m_values[i] : 0L;
     }
 
-    bool set(Index i, long value) {
+    bool set_by_index(int i, long value) {
       if (0 <= i && i < COUNT) {
         m_values[i] = value;
         return true;
@@ -213,38 +156,115 @@ class Parameters {
       return false;
     }
 
-    static void load_name(Index i, char buffer[]) {
-      if (0 <= i && i < COUNT) {
-        auto const source =
-          reinterpret_cast<char const *>(pgm_read_word(m_names + i));
-        strcpy_P(buffer, source);
-      } else {
-        strcpy(buffer, "OOB");
-      }
-    }
+  private:
+    virtual bool do_load_defaults() = 0;
+    virtual bool do_sane() const = 0;
+    virtual void do_print_name(int i) const = 0;
 
     int m_version;
     long m_values[COUNT];
+};
 
-    static char const * const m_names[COUNT];
-    static int constexpr current_version = 1;
-    static int constexpr magic = 307;
+enum class Parameter {
+  // VERSION 1
+  SUSPENSE_TIME,
+  MIN_RUN_TIME,
+  MAX_RUN_TIME,
+  MIN_KNOCK_ON_TIME,
+  MAX_KNOCK_ON_TIME,
+  MIN_KNOCK_OFF_TIME,
+  MAX_KNOCK_OFF_TIME,
+  LOCKOUT_TIME,
+
+  COUNT
+};
+
+class CoffinKnockerParameters :
+  public Parameters<static_cast<int>(Parameter::COUNT), 307, 1>
+{
+  public:
+    // The suspense time is how long (in milliseconds) after motion is detected
+    // the action should begin.  A short delay after motion is detected may
+    // help in surprising victims, but this can be set to 0.
+    long suspense_time() const {
+      return get(Parameter::SUSPENSE_TIME);
+    }
+
+    // After the suspense time, the coffin will knock randomly for the
+    // run time, which is selected randomly from a range.
+    long random_run_time() const {
+      return random(get(Parameter::MIN_RUN_TIME), get(Parameter::MAX_RUN_TIME));
+    }
+
+    // Each knock consists of a random on time ...
+    long random_knock_on_time() const {
+      return random(get(Parameter::MIN_KNOCK_ON_TIME), get(Parameter::MAX_KNOCK_ON_TIME));
+    }
+    // ... followed by an off time.
+    long random_knock_off_time() const {
+      return random(get(Parameter::MIN_KNOCK_OFF_TIME), get(Parameter::MAX_KNOCK_OFF_TIME));
+    }
+
+    // After a sequence, motion triggers are ignored for the lockout time.
+    long lockout_time() const {
+      return get(Parameter::LOCKOUT_TIME);
+    }
+
+    long get(Parameter p) const { return get_by_index(static_cast<int>(p)); }
+    bool set(Parameter p, long value) { return set_by_index(static_cast<int>(p), value); }
+
+  private:
+    bool do_load_defaults() override {
+      set(Parameter::SUSPENSE_TIME,         0);
+      set(Parameter::MIN_RUN_TIME,       2500);
+      set(Parameter::MAX_RUN_TIME,       6000);
+      set(Parameter::MIN_KNOCK_ON_TIME,   200);
+      set(Parameter::MAX_KNOCK_ON_TIME,   400);
+      set(Parameter::MIN_KNOCK_OFF_TIME,  200);
+      set(Parameter::MAX_KNOCK_OFF_TIME,  900);
+      set(Parameter::LOCKOUT_TIME,       6000);
+      return true;
+    }
+
+    bool do_sane() const override {
+      long constexpr one_minute = 60 * 1000L;
+      if (get(Parameter::SUSPENSE_TIME) < 0 || one_minute < get(Parameter::SUSPENSE_TIME)) return false;
+      if (get(Parameter::MIN_RUN_TIME) < 1000) return false;
+      if (get(Parameter::MAX_RUN_TIME) < get(Parameter::MIN_RUN_TIME) || one_minute < get(Parameter::MAX_RUN_TIME)) return false;
+      if (get(Parameter::MIN_KNOCK_ON_TIME) < 200) return false;
+      if (get(Parameter::MAX_KNOCK_ON_TIME) < get(Parameter::MIN_KNOCK_ON_TIME) || one_minute < get(Parameter::MAX_KNOCK_ON_TIME)) return false;
+      if (get(Parameter::MIN_KNOCK_OFF_TIME) < 200) return false;
+      if (get(Parameter::MAX_KNOCK_OFF_TIME) < get(Parameter::MIN_KNOCK_OFF_TIME) || one_minute < get(Parameter::MAX_KNOCK_OFF_TIME)) return false;
+      if (get(Parameter::LOCKOUT_TIME) < 0 || one_minute < get(Parameter::LOCKOUT_TIME)) return false;
+      return true;
+    }
+
+    void do_print_name(int i) const override {
+      if (i < 0 || static_cast<int>(Parameter::COUNT) <= i) return;
+      auto source =
+        reinterpret_cast<char const *>(pgm_read_word(m_names + i));
+      for (auto ch = pgm_read_byte_near(source++); ch != '\0'; ch = pgm_read_byte_near(source++)) {
+        Serial.print(static_cast<char>(ch));
+      }
+    }
+
+    static char const * const m_names[static_cast<int>(Parameter::COUNT)];
 } params;
 
-char const NAME_Suspense[] PROGMEM = "Suspense";
-char const NAME_Min_Run[]  PROGMEM = "Min Run";
-char const NAME_Max_Run[]  PROGMEM = "Max Run";
-char const NAME_Min_Knock_On[] PROGMEM = "Min Knock On";
-char const NAME_Max_Knock_On[] PROGMEM = "Max Knock On";
-char const NAME_Min_Knock_Off[] PROGMEM = "Min Knock Off";
-char const NAME_Max_Knock_Off[] PROGMEM = "Max Knock Off";
-char const NAME_Lockout[] PROGMEM = "Lockout";
-char const * const Parameters::m_names[Parameters::COUNT] PROGMEM = {
-  NAME_Suspense,
-  NAME_Min_Run, NAME_Max_Run,
-  NAME_Min_Knock_On, NAME_Max_Knock_On,
-  NAME_Min_Knock_Off, NAME_Max_Knock_Off,
-  NAME_Lockout
+char const NAME_SUSPENSE[] PROGMEM = "SUSPENSE";
+char const NAME_MIN_RUN[]  PROGMEM = "MIN_RUN";
+char const NAME_MAX_RUN[]  PROGMEM = "MAX_RUN";
+char const NAME_MIN_KNOCK_ON[] PROGMEM = "MIN_KNOCK_ON";
+char const NAME_MAX_KNOCK_ON[] PROGMEM = "MAX_KNOCK_ON";
+char const NAME_MIN_KNOCK_OFF[] PROGMEM = "MIN_KNOCK_OFF";
+char const NAME_MAX_KNOCK_OFF[] PROGMEM = "MAX_KNOCK_OFF";
+char const NAME_LOCKOUT[] PROGMEM = "LOCKOUT";
+char const * const CoffinKnockerParameters::m_names[static_cast<int>(Parameter::COUNT)] PROGMEM = {
+  NAME_SUSPENSE,
+  NAME_MIN_RUN, NAME_MAX_RUN,
+  NAME_MIN_KNOCK_ON, NAME_MAX_KNOCK_ON,
+  NAME_MIN_KNOCK_OFF, NAME_MAX_KNOCK_OFF,
+  NAME_LOCKOUT
 };
 
 enum class State {
@@ -270,17 +290,17 @@ class Parser {
   public:
     explicit Parser(char const * buffer) : m_p(buffer) {}
 
-    int parseInteger() {
+    long parseLong() {
       while (Accept(' ')) {}
       const bool neg = Accept('-');
       if (!neg) Accept('+');
-      const auto result = static_cast<int>(parseUnsigned());
+      const auto result = static_cast<long>(parseUnsignedLong());
       return neg ? -result : result;
     }
 
-    unsigned parseUnsigned() {
+    unsigned long parseUnsignedLong() {
       while (Accept(' ')) {}
-      unsigned result = 0;
+      unsigned long result = 0;
       while (MatchDigit()) {
         result *= 10;
         result += *m_p - '0';
@@ -290,6 +310,7 @@ class Parser {
     }
 
     bool Advance() { ++m_p; return true; }
+
     bool Accept(char ch) { return (*m_p == ch) ? Advance() : false; }
     bool MatchDigit() const { return '0' <= *m_p && *m_p <= '9'; }
     bool MatchLetter() const {
@@ -297,18 +318,25 @@ class Parser {
                ('a' <= *m_p && *m_p <= 'z');
     }
 
+
+    bool Expect() { return true; }
+
+    template <typename ... T>
+    bool Expect(char head, T... tail) { return Accept(head) && Expect(tail...); }
+
     bool AllowSuffix() { return Accept(' ') || !MatchLetter(); }
 
     template <typename ... T>
     bool AllowSuffix(char head, T... tail) {
-      return !MatchLetter() || (Accept(head) && AllowSuffix(tail...));
+      if (Accept(head)) return AllowSuffix(tail...);
+      return Accept(' ') || !MatchLetter();
     }
 
     const char *m_p;
 };
 
 enum class Keyword {
-  UNKNOWN, CLEAR, DEFAULTS, EEPROM, HELP, LIST, LOAD, RUN, SAVE, TRIGGER
+  UNKNOWN, CLEAR, DEFAULTS, EEPROM, HELP, LIST, LOAD, RUN, SAVE, SET
 };
 
 class CoffinKnockerParser : public Parser {
@@ -316,14 +344,6 @@ class CoffinKnockerParser : public Parser {
     CoffinKnockerParser(char const *buffer) : Parser(buffer) {}
 
     Keyword parseKeyword() {
-      // A hand-rolled TRIE.  This may seem crazy, but many
-      // microcontrollers have very limited RAM.  A data-driven
-      // solution would require a table in RAM, so that's a
-      // non-starter.  Instead, we "unroll" what the data-driven
-      // solution would do so that it gets coded directly into
-      // program memory.  Believe it or not, the variadic template
-      // for AllowSuffix actually reduces the amount of code
-      // generated versus a completely hand-rolled expression.
       if (Accept('C')) return AllowSuffix(Keyword::CLEAR, 'L', 'E', 'A', 'R');
       if (Accept('D')) return AllowSuffix(Keyword::DEFAULTS, 'E', 'F', 'A', 'U', 'L', 'T', 'S');
       if (Accept('E')) {
@@ -337,15 +357,62 @@ class CoffinKnockerParser : public Parser {
         return Keyword::UNKNOWN;
       }
       if (Accept('R')) return AllowSuffix(Keyword::RUN, 'U', 'N');
-      if (Accept('S')) return AllowSuffix(Keyword::SAVE, 'A', 'V', 'E');
-      if (Accept('T')) return AllowSuffix(Keyword::TRIGGER, 'R', 'I', 'G', 'G', 'E', 'R');
+      if (Accept('S')) {
+        if (Accept('A')) return AllowSuffix(Keyword::SAVE, 'V', 'E');
+        if (Accept('E')) return AllowSuffix(Keyword::SET, 'T');
+        return Keyword::UNKNOWN;
+      }
       return Keyword::UNKNOWN;
+    }
+
+    Parameter parseParameter() {
+      if (Accept('L')) return AllowSuffix(Parameter::LOCKOUT_TIME, 'O', 'C', 'K', 'O', 'U', 'T');
+      if (Accept('M')) {
+        if (Accept('A')) {
+          if (Expect('X', '_')) {
+            if (Accept('K')) {
+              if (Expect('N', 'O', 'C', 'K', '_', 'O')) {
+                if (Accept('F')) return AllowSuffix(Parameter::MAX_KNOCK_OFF_TIME, 'F');
+                if (Accept('N')) return AllowSuffix(Parameter::MAX_KNOCK_ON_TIME);
+                return Parameter::COUNT;
+              }
+              return Parameter::COUNT;
+            }
+            if (Accept('R')) return AllowSuffix(Parameter::MAX_RUN_TIME, 'U', 'N');
+            return Parameter::COUNT;
+          }
+          return Parameter::COUNT;
+        }
+        if (Accept('I')) {
+          if (Expect('N', '_')) {
+            if (Accept('K')) {
+              if (Expect('N', 'O', 'C', 'K', '_', 'O')) {
+                if (Accept('F')) return AllowSuffix(Parameter::MIN_KNOCK_OFF_TIME, 'F');
+                if (Accept('N')) return AllowSuffix(Parameter::MIN_KNOCK_ON_TIME);
+                return Parameter::COUNT;
+              }
+              return Parameter::COUNT;
+            }
+            if (Accept('R')) return AllowSuffix(Parameter::MIN_RUN_TIME, 'U', 'N');
+            return Parameter::COUNT;
+          }
+          return Parameter::COUNT;
+        }
+        return Parameter::COUNT;
+      }
+      if (Accept('S')) return AllowSuffix(Parameter::SUSPENSE_TIME, 'U', 'S', 'P', 'E', 'N', 'S', 'E');
+      return Parameter::COUNT;
     }
 
   private:
     template <typename ... T>
     Keyword AllowSuffix(Keyword kw, T... suffix) {
       return Parser::AllowSuffix(suffix...) ? kw : Keyword::UNKNOWN;
+    }
+
+    template <typename ... T>
+    Parameter AllowSuffix(Parameter p, T... suffix) {
+      return Parser::AllowSuffix(suffix...) ? p : Parameter::COUNT;
     }
 };
 
@@ -362,7 +429,6 @@ static void help() {
   Serial.println(F(" RUN           - runs the prop with the current settings"));
   Serial.println(F(" SAVE EEPROM   - saves current settings to EEPROM"));
   Serial.println(F(" SET <setting>=<value>"));
-  Serial.println(F(" TRIGGER       - starts the sequence as if motion detected"));
   if (!params.sane()) {
     Serial.println(F("\n* There is a problem with the current settings. The RUN"));
     Serial.println(F("command will not work until the problem is solved."));
@@ -463,9 +529,16 @@ static void execute_command(char const *command) {
       if (parser.parseKeyword() != Keyword::EEPROM) break;
       if (!save_to_eeprom()) break;
       return;
-    case Keyword::TRIGGER:
-      if (!trigger(millis())) break;
+    case Keyword::SET: {
+      Parameter const p = parser.parseParameter();
+      if (p == Parameter::COUNT) break;
+      parser.Accept(':'); parser.Accept('='); parser.Accept(' ');
+      if (!parser.MatchDigit()) break;
+      long value = parser.parseLong();
+      if (!params.set(p, value)) break;
+      list();
       return;
+    }
   }
   Serial.println(F("Type HELP for detailed instructions."));
 }
