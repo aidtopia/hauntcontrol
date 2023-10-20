@@ -70,6 +70,7 @@ module PIR_housing(nozzle_d=0.4) {
     lip_d  = 14.2;
     lip_th = 0.4;
     neck_d = 10.4;
+    neck_l = 3.8;
     cable_d = 5;
     thread_d = 18;
     thread_pitch = 1.5;
@@ -86,19 +87,33 @@ module PIR_housing(nozzle_d=0.4) {
     module body() {
         difference() {
             union() {
+                // hexagonal shell
                 cylinder(h=body_l-thread_l, d=body_d, $fn=6);
+                // threaded top
                 translate([0, 0, body_l-thread_l])
                     threads(thread_l, thread_d, thread_pitch, tap=false,
                             nozzle_d=nozzle_d);
             }
+            // cable entry
             translate([0, 0, -1])
                 cylinder(h=body_l+2, d=cable_d+nozzle_d);
-            translate([0, 0, th])
-                cylinder(h=body_l, d=neck_d+nozzle_d);
-            translate([0, 0, body_l-lip_th]) {
-                cylinder(h=lip_th+1, d=lip_d+nozzle_d);
+            // cavity for board (and support beneath the neck)
+            translate([0, 0, th]) {
+                linear_extrude(body_l+1, convexity=4) {
+                    intersection() {
+                        circle(d=neck_d + nozzle_d);
+                        square([neck_d+nozzle_d, neck_d-3], center=true);
+                    }
+                }
             }
+            // cavity for the neck
+            translate([0, 0, body_l-lip_th-neck_l])
+                cylinder(h=neck_l+1, d=neck_d+nozzle_d);
+            // recess for the lip of the lens
+            translate([0, 0, body_l-lip_th])
+                cylinder(h=lip_th+1, d=lip_d+nozzle_d);
             
+            // Slot for attaching with a perpendicular zip tie.
             translate([0, ziptie_dy, ziptie_dz]) {
                 rotate([90, 0, 90]) {
                     linear_extrude(body_d, center=true) {
@@ -109,6 +124,19 @@ module PIR_housing(nozzle_d=0.4) {
                                 [ziptie_th, ziptie_w],
                                 [0, ziptie_w+ziptie_th]
                             ]);
+                        }
+                    }
+                }
+            }
+            
+            // Slot for attaching with a parallel zip tie.
+            shell_h = body_l - thread_l;
+            zip_r = shell_h/1.8;
+            translate([0, -body_d+ziptie_th, shell_h/2]) {
+                rotate([0, 90, 0]) {
+                    rotate_extrude(angle=180, convexity=4, $fa=3) {
+                        translate([zip_r, 0]) {
+                            square([ziptie_th, ziptie_w+nozzle_d], center=true);
                         }
                     }
                 }

@@ -36,8 +36,48 @@
 
 #include <EEPROM.h>
 
-int constexpr trigger_pin  = 2;  // input, HIGH indicates motion
+int constexpr motion_pin  = 2;  // input, HIGH indicates motion
 int constexpr solenoid_pin = 9;  // output, HIGH opens the valve
+
+template <int BUFFER_SIZE>
+class CommandBuffer {
+  public:
+    void begin() {
+      memset(buf, '\0', sizeof(buf));
+      buflen = 0;
+    }
+
+    bool available() {
+      while (Serial.available()) {
+        char ch = Serial.read();
+        if (buflen == sizeof(buf)) buflen = 0;
+        switch (ch) {
+          case '\r': break;
+          case '\n':
+            buf[buflen] = '\0';
+            buflen = 0;
+            return true;
+          case ' ': case '\t':
+            if (buflen == 0) break;
+            if (buf[buflen - 1] == ' ') break;
+            buf[buflen++] = ' ';
+            break;
+          default:
+            if (ch < ' ') break;
+            if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 'A';
+            buf[buflen++] = ch;
+            break;
+        }
+      }
+      return false;
+    }
+
+    operator const char *() const { return buf; }
+
+  private:
+    char buf[BUFFER_SIZE];
+    int buflen = 0;
+};
 
 class Parameters {
   public:
@@ -208,8 +248,6 @@ char const * const Parameters::m_names[Parameters::COUNT] PROGMEM = {
 };
 
 enum class State {
-  initializing,
-
   // The normal operating states...
   waiting,
   suspense,
@@ -219,15 +257,217 @@ enum class State {
 
   // Meta states...
   programming
-} state = State::initializing;
+} state = State::programming;
 
 // timeout is the time the next state change should occur (millis).
 unsigned long timeout = 0;
 // knock_timeout is the time the current knock_on or knock_off ends.
 unsigned long knock_timeout = 0;
 
-static long eat_input() {
-  while (Serial.available()) Serial.read();
+CommandBuffer<32> command;
+
+class Parser {
+  public:
+    explicit Parser(char const * buffer) : m_p(buffer) {}
+
+    int parseInteger() {
+      while (Accept(' ')) {}
+      const bool neg = Accept('-');
+      if (!neg) Accept('+');
+      const auto result = static_cast<int>(parseUnsigned());
+      return neg ? -result : result;
+    }
+
+    unsigned parseUnsigned() {
+      while (Accept(' ')) {}
+      unsigned result = 0;
+      while (MatchDigit()) {
+        result *= 10;
+        result += *m_p - '0';
+        Advance();
+      }
+      return result;
+    }
+
+    bool Advance() { ++m_p; return true; }
+    bool Accept(char ch) { return (*m_p == ch) ? Advance() : false; }
+    bool MatchDigit() const { return '0' <= *m_p && *m_p <= '9'; }
+    bool MatchLetter() const {
+        return ('A' <= *m_p && *m_p <= 'Z') ||
+               ('a' <= *m_p && *m_p <= 'z');
+    }
+
+    bool AllowSuffix() { return Accept(' ') || !MatchLetter(); }
+
+    template <typename ... T>
+    bool AllowSuffix(char head, T... tail) {
+      return !MatchLetter() || (Accept(head) && AllowSuffix(tail...));
+    }
+
+    const char *m_p;
+};
+
+enum class Keyword {
+  UNKNOWN, CLEAR, DEFAULTS, EEPROM, HELP, LIST, LOAD, RUN, SAVE, TRIGGER
+};
+
+class CoffinKnockerParser : public Parser {
+  public:
+    CoffinKnockerParser(char const *buffer) : Parser(buffer) {}
+
+    Keyword parseKeyword() {
+      // A hand-rolled TRIE.  This may seem crazy, but many
+      // microcontrollers have very limited RAM.  A data-driven
+      // solution would require a table in RAM, so that's a
+      // non-starter.  Instead, we "unroll" what the data-driven
+      // solution would do so that it gets coded directly into
+      // program memory.  Believe it or not, the variadic template
+      // for AllowSuffix actually reduces the amount of code
+      // generated versus a completely hand-rolled expression.
+      if (Accept('C')) return AllowSuffix(Keyword::CLEAR, 'L', 'E', 'A', 'R');
+      if (Accept('D')) return AllowSuffix(Keyword::DEFAULTS, 'E', 'F', 'A', 'U', 'L', 'T', 'S');
+      if (Accept('E')) {
+        Accept('E');  // Allow "EEPROM" or "EPROM"
+        return AllowSuffix(Keyword::EEPROM, 'P', 'R', 'O', 'M');
+      }
+      if (Accept('H')) return AllowSuffix(Keyword::HELP, 'E', 'L', 'P');
+      if (Accept('L')) {
+        if (Accept('I')) return AllowSuffix(Keyword::LIST, 'S', 'T');
+        if (Accept('O')) return AllowSuffix(Keyword::LOAD, 'A', 'D');
+        return Keyword::UNKNOWN;
+      }
+      if (Accept('R')) return AllowSuffix(Keyword::RUN, 'U', 'N');
+      if (Accept('S')) return AllowSuffix(Keyword::SAVE, 'A', 'V', 'E');
+      if (Accept('T')) return AllowSuffix(Keyword::TRIGGER, 'R', 'I', 'G', 'G', 'E', 'R');
+      return Keyword::UNKNOWN;
+    }
+
+  private:
+    template <typename ... T>
+    Keyword AllowSuffix(Keyword kw, T... suffix) {
+      return Parser::AllowSuffix(suffix...) ? kw : Keyword::UNKNOWN;
+    }
+};
+
+static void help() {
+  if (state == State::programming) {
+    Serial.println(F("The prop is paused so that you can change the settings."));
+  }
+  Serial.println(F("\nCommands:"));
+  Serial.println(F(" CLEAR EEPROM  - clears any settings currently saved in EEPROM"));
+  Serial.println(F(" HELP          - shows these instructions"));
+  Serial.println(F(" LIST          - shows current settings"));
+  Serial.println(F(" LOAD DEFAULTS - sets current settings to factory defaults"));
+  Serial.println(F(" LOAD EEPROM   - loads previously saved settings"));
+  Serial.println(F(" RUN           - runs the prop with the current settings"));
+  Serial.println(F(" SAVE EEPROM   - saves current settings to EEPROM"));
+  Serial.println(F(" SET <setting>=<value>"));
+  Serial.println(F(" TRIGGER       - starts the sequence as if motion detected"));
+  if (!params.sane()) {
+    Serial.println(F("\n* There is a problem with the current settings. The RUN"));
+    Serial.println(F("command will not work until the problem is solved."));
+    Serial.println(F("If you don't know how to solve the problem, try this:"));
+    Serial.println(F(" LOAD DEFAULTS\n SAVE\n RUN"));
+  }
+}
+
+static void clear() {
+  params.clear_eeprom();
+  Serial.println(F("Settings stored in EEPROM have been cleared."));
+}
+
+static void list() {
+  params.show();
+  if (!params.sane()) {
+    Serial.println(F("\n* Cannot run with these settings."));
+  }
+}
+
+static bool load_defaults() {
+  if (!params.load_defaults()) {
+    Serial.println(F("Could not load defaults."));
+    return false;
+  }
+  Serial.println(F("Loaded default settings."));
+  list();
+  return true;
+}
+
+static bool load_from_eeprom() {
+  if (!params.load_from_eeprom()) {
+    Serial.println(F("Could not load settings from EEPROM."));
+    return false;
+  }
+  Serial.println(F("Loaded settings from EEPROM."));
+  list();
+  return true;
+}
+
+static bool run(unsigned long now) {
+  if (!params.sane()) {
+    Serial.println(F("Cannot run with current settings."));
+    state = State::programming;
+    return false;
+  }
+
+  state = State::waiting;
+  Serial.print(now);
+  Serial.println(F(" Waiting..."));
+  return true;
+}
+
+static bool save_to_eeprom() {
+  if (!(params.sane() && params.save_to_eeprom())) {
+    Serial.println(F("Could not save settings to EEPROM."));
+    return false;
+  }
+  return true;  
+}
+
+static bool trigger(unsigned long now) {
+  if (!params.sane()) {
+    Serial.println(F("Cannot run with current settings."));
+    state = State::programming;
+    return false;
+  }
+  timeout = now + params.suspense_time();
+  state = State::suspense;
+  Serial.print(now);
+  Serial.println(F(" Triggered"));
+  return true;
+}
+
+static void execute_command(char const *command) {
+  CoffinKnockerParser parser(command);
+  switch (parser.parseKeyword()) {
+    case Keyword::HELP:  help();  return;
+    case Keyword::CLEAR:
+      if (parser.parseKeyword() != Keyword::EEPROM) break;
+      clear();
+      return;
+    case Keyword::LIST:  list();  return;
+    case Keyword::LOAD:
+      switch (parser.parseKeyword()) {
+        case Keyword::DEFAULTS:
+          if (!load_defaults()) break;
+          return;
+        case Keyword::EEPROM:
+          if (!load_from_eeprom()) break;
+          return;
+      }
+      break;
+    case Keyword::RUN:
+      if (!run(millis())) break;
+      return;
+    case Keyword::SAVE:
+      if (parser.parseKeyword() != Keyword::EEPROM) break;
+      if (!save_to_eeprom()) break;
+      return;
+    case Keyword::TRIGGER:
+      if (!trigger(millis())) break;
+      return;
+  }
+  Serial.println(F("Type HELP for detailed instructions."));
 }
 
 void setup() {
@@ -235,7 +475,7 @@ void setup() {
   digitalWrite(solenoid_pin, LOW);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-  pinMode(trigger_pin, INPUT);
+  pinMode(motion_pin, INPUT);
   Serial.begin(115200);
   while (!Serial) {}  // not necessary for Pro Mini, but no harm
   Serial.println(F("\nCoffin Knocker"));
@@ -246,19 +486,29 @@ void setup() {
   Serial.print(F("Random Seed: "));
   Serial.println(seed);
   randomSeed(seed);
-  state = State::initializing;
+
+  if (!((load_from_eeprom() || load_defaults()) && run(millis()))) {
+    help();
+  }
 }
 
 void loop() {
   // The onboard LED always shows the current state of the motion sensor.
   // This can help when setting up the sensor.
-  int const trigger = digitalRead(trigger_pin);
-  digitalWrite(LED_BUILTIN, trigger);
+  int const motion = digitalRead(motion_pin);
+  digitalWrite(LED_BUILTIN, motion);
 
-  // Serial input always takes us to the programming state.
-  if (Serial.available() && state != State::programming) {
-    Serial.println(F("Programming Mode"));
-    state = State::programming;
+  if (command.available()) {
+    if (state != State::programming) {
+      state = State::programming;
+      Serial.print(F("> "));
+    }
+    Serial.println(command);
+    execute_command(command);
+    if (state == State::programming) {
+      Serial.print(F("> "));
+      Serial.flush();
+    }
   }
 
   // We set the solenoid output every time through the loop, not just when
@@ -269,46 +519,19 @@ void loop() {
   unsigned long const now = millis();
 
   switch (state) {
-    case State::initializing: {
-      if (params.load_from_eeprom(0) && params.sane()) {
-        Serial.println(F("Timing parameters loaded from EEPROM."));
-        params.show();
-        state = State::waiting;
-        Serial.print(now);
-        Serial.println(F(" Waiting..."));
-        break;
-      }
-      if (params.load_defaults() && params.sane()) {
-        Serial.println(F("Using default timing parameters."));
-        params.show();
-        state = State::waiting;
-        Serial.print(now);
-        Serial.println(F(" Waiting..."));
-        break;
-      }
-      Serial.println(F("Timing parameters not available."));
-      state = State::programming;
-      break;
-    }
-
     case State::waiting: {
-      if (trigger == HIGH) {
-        timeout = now + params.suspense_time();
-        state = State::suspense;
-        Serial.print(now);
-        Serial.println(F(" Triggered"));
-      }
+      if (motion == HIGH) trigger(now);
       break;
     }
 
     case State::suspense: {
       if (now >= timeout) {
-        if (trigger == LOW) {
+        if (motion == LOW) {
           // This won't ever happen if the suspense_time is less than the
           // minimum time the sensor will signal a motion event.
+          state = State::waiting;
           Serial.print(now);
           Serial.println(F(" Canceled"));
-          state = State::waiting;
         } else {
           long const run_time = params.random_run_time();
           timeout = now + run_time;
@@ -365,42 +588,6 @@ void loop() {
     }
 
     case State::programming: {
-      if (!Serial.available()) break;
-      int ch = Serial.read();
-      if (ch == '\n' || ch == '\r' || ch == ' ' || ch == '\t') break;
-      if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 'A';
-      if (' ' < ch && ch < 127) Serial.println((char) ch); else Serial.println(ch);
-
-      switch (ch) {
-        case 'C':
-          params.clear_eeprom();
-          break;
-        case 'D':
-          params.load_defaults();
-          [[fallthrough]]
-        case 'L':
-          params.show();
-          break;
-        case 'S':
-          if (params.sane() && params.save_to_eeprom()) {
-            state = State::waiting;
-          } else {
-            Serial.println(F("Could not save settings to EEPROM."));
-          }
-          break;
-        case 'R':
-          state = params.sane() ? State::waiting : State::initializing;
-          break;
-      }
-      eat_input();
-      if (state == State::programming) {
-        Serial.print(F("(L)ist, (D)efaults, (S)ave, (C)lear, (R)un: "));
-        Serial.flush();
-      }
-      if (state == State::waiting) {
-        Serial.println(F("Waiting..."));
-        eat_input();  // seems redundant, but it makes a difference
-      }
       break;
     }
   }
