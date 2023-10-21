@@ -46,12 +46,12 @@ module coffin_knocker_electronics_housing(nozzle_d=0.4) {
     jack_h = 11;
     jack_dx = -(board_l + th)/2;
     jack_dy = -jack_w/2;
-    // The top has a slot for a connector to the PIR sensor.
-    sensor_l = 12 + nozzle_d/2;
-    sensor_w = 3 + nozzle_d/2;
-    sensor_dx = 10.5 * 2.54;
-    sensor_dy =  7.25 * 2.54;
-    sensor_h = 5;  // height of internal walls to guide connector
+    // An opening for the cable to the motion sensor.
+    sensor_d = 5;
+    sensor_w = sensor_d + 2*nozzle_d;
+    sensor_dx = (board_l + th)/2;
+    sensor_dy = 18.7;
+    sensor_dz = 5;
     // The base has "tabs" with holes for mounting with #6 flat head screws.
     tab_w = max(9, ftdi_overhang);
     screw_free_r  = (0.1495 * 25.4 + nozzle_d) / 2;
@@ -127,6 +127,19 @@ module coffin_knocker_electronics_housing(nozzle_d=0.4) {
         }
     }
     
+    module sensor_support() {
+        z = th+board_descent+sensor_dz;
+        difference() {
+            linear_extrude(z) {
+                translate([sensor_dx, sensor_dy])
+                    square([th, sensor_w], center=true);
+            }
+            translate([sensor_dx, sensor_dy, z])
+                rotate([0, 90, 0])
+                    cylinder(h=th+2, d=sensor_d, center=true);
+        }
+    }
+    
     module screw_support() {
         rotate_extrude(convexity=4)
             polygon([
@@ -138,10 +151,6 @@ module coffin_knocker_electronics_housing(nozzle_d=0.4) {
             ]);
     }
     
-    module sensor_slot_footprint() {
-        square([sensor_w, sensor_l], center=true);
-    }
-        
     module base() {
         difference() {
             union() {
@@ -162,6 +171,7 @@ module coffin_knocker_electronics_housing(nozzle_d=0.4) {
                 jack_support();
                 ftdi_support();
                 valve_support();
+                sensor_support();
             }
             
             translate([0, 0, -1])
@@ -188,28 +198,21 @@ module coffin_knocker_electronics_housing(nozzle_d=0.4) {
                 linear_extrude(board_descent+board_th+valve_dz+1)
                     translate([valve_dx, valve_dy])
                         square([th+2, valve_w], center=true);
+                linear_extrude(board_descent+board_th+sensor_dz+1)
+                    translate([sensor_dx, sensor_dy])
+                        square([th+2, sensor_w], center=true);
             }
             translate([valve_dx, valve_dy, board_descent+board_th+valve_dz])
                 rotate([0, 90, 0])
                     cylinder(h=2+th, d=valve_d, center=true);
+            translate([sensor_dx, sensor_dy, board_descent+board_th+sensor_dz])
+                rotate([0, 90, 0])
+                    cylinder(h=2+th, d=sensor_d, center=true);
         }
         translate([0, 0, board_descent+board_ascent]) {
             difference() {
-                union () {
-                    linear_extrude(th)
-                        offset(r=th) board_footprint();
-                    translate([sensor_dx, sensor_dy, -sensor_h]) {
-                        linear_extrude(sensor_h, convexity=6) {
-                            difference() {
-                                offset(r=th) sensor_slot_footprint();
-                                sensor_slot_footprint();
-                            }
-                        }
-                    }
-                }
-                translate([sensor_dx, sensor_dy, -1])
-                    linear_extrude(th+2)
-                        sensor_slot_footprint();
+                linear_extrude(th)
+                    offset(r=th) board_footprint();
                 translate([0, 0, th/2])
                     linear_extrude(th, convexity=10) {
                         translate([0, 4])
