@@ -6,7 +6,7 @@
 // appears to be out of business.  The prop has a single-action pneumatic
 // cylinder and a spring that causes the lid of the coffin to bang.
 //
-// The original control box required one 9-volt an eight AA batteries, which
+// The original control box required one 9-volt and eight AA batteries, which
 // is a bit inconvenient.  Also, the microwave motion detector no longer
 // functioned well.
 //
@@ -433,7 +433,7 @@ static void help() {
     Serial.println(F("\n* There is a problem with the current settings. The RUN"));
     Serial.println(F("command will not work until the problem is solved."));
     Serial.println(F("If you don't know how to solve the problem, try this:"));
-    Serial.println(F(" LOAD DEFAULTS\n SAVE\n RUN"));
+    Serial.println(F(" LOAD DEFAULTS\n SAVE EEPROM\n RUN"));
   }
 }
 
