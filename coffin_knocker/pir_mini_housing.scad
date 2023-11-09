@@ -1,68 +1,7 @@
 // Mini PIR sensor housing
-// Adrian McCarthy
+// Adrian McCarthy 2023
 
-// Metric screw threads.
-// https://en.wikipedia.org/wiki/ISO_metric_screw_thread
-// * internal thread: tap=true and subtract the resulting shape
-// * external thread: tap=false
-module threads(h, d, pitch, tap=true, nozzle_d=0.4) {
-    thread_h = pitch / (2*tan(30));
-    // An M3 screw has a major diameter of 3 mm.  For a tap, we nudge it
-    // up with the nozzle diameter to compensate for the problem of
-    // printing accurate holes and to generally provide some clearance.
-    d_major = d + (tap ? nozzle_d : -nozzle_d);
-    d_minor = d_major - 2 * (5/8) * thread_h;
-    d_max = d_major + 2*thread_h/8;
-    d_min = d_minor - 2*thread_h/4;
-    
-    echo(str("M", d, "x", pitch, ": thread_h=", thread_h, "; d_major=", d_major, "; d_minor=", d_minor));
-
-    x_major = 0;
-    x_deep  = x_major + thread_h/8;
-    x_minor = x_major - 5/8*thread_h;
-    x_clear = x_minor - thread_h/4;
-    y_major = pitch/16;
-    y_minor = 3/8 * pitch;
-    
-    wedge_points = [
-        [x_deep, 0],
-        [x_minor, y_minor],
-        [x_minor, pitch/2],
-        [x_clear, pitch/2],
-        [x_clear, -pitch/2],
-        [x_minor, -pitch/2],
-        [x_minor, -y_minor]
-    ];
-
-    r = d_major / 2;
-
-    facets =
-        ($fn > 0) ? max(3, $fn)
-                  : max(5, ceil(min(360/$fa, 2*PI*r / $fs)));
-    dtheta = 360 / facets;
-    echo(str("dtheta for threads = ", dtheta));
-
-    module wedge() {
-        rotate([1.35, 0, 0])
-            rotate([0, 0, -(dtheta+0.1)/2])
-                rotate_extrude(angle=dtheta+0.1, convexity=10)
-                    translate([r, 0])
-                        polygon(wedge_points);
-    }
-
-    intersection() {
-        union() {
-            for (theta = [-180 : dtheta : h*360/pitch + 180]) {
-                rotate([0, 0, theta]) translate([0, 0, pitch*theta/360])
-                    wedge();
-            }
-            
-            cylinder(h=h, d=(tap ? d_minor : d_min+nozzle_d));
-        }
-        cylinder(h=h, d=(tap ? d_max : d_major));
-    }
-}
-
+use <aidthread.scad>
 
 module PIR_housing(nozzle_d=0.4) {
     th = 2;
@@ -71,16 +10,28 @@ module PIR_housing(nozzle_d=0.4) {
     lip_th = 0.4;
     neck_d = 10.4;
     neck_l = 3.8;
+    neck_flat = neck_d - 3;
     cable_d = 5;
-    thread_d = 18;
-    thread_pitch = 1.5;
-    thread_l = 4*thread_pitch;
-    body_l = 28.5+th;
-    body_d = thread_d+2*th;
+    cap_thread_d = 18;
+    cap_thread_pitch = 1.5;
+    cap_thread_l = 4*cap_thread_pitch;
+    pg7_thread_d = 12;
+    pg7_thread_pitch = 1.5;
+    pg7_thread_l = 4.5*pg7_thread_pitch;
+    sensor_l = 24;
+    shell_h = pg7_thread_l + sensor_l + th;
+    shell_d = max(cap_thread_d, pg7_thread_d) + 2*(th + nozzle_d);
+    body_h = shell_h + cap_thread_l;
+    reducer_d1 = pg7_thread_d + nozzle_d;
+    reducer_d2 = neck_flat + nozzle_d;
+    reducer_h = reducer_d1 - reducer_d2;  // 45 deg angle
     ziptie_w  = 5 + nozzle_d;
     ziptie_th = 1.5 + nozzle_d;
-    ziptie_dy = (thread_d-ziptie_th)/2-nozzle_d;
-    ziptie_dz = (body_l-thread_l)/2;
+    ziptie_dy = (cap_thread_d - ziptie_th)/2 - nozzle_d;
+    ziptie_dz = sensor_l/2 + cap_thread_l;
+    zip_r = sensor_l/1.8;
+    cap_l = cap_thread_l + th;  // minimum cap length
+    cap_dl = 3;  // step size for increasing lengths of the cap
 
     $fs=nozzle_d/2;
 
@@ -88,18 +39,22 @@ module PIR_housing(nozzle_d=0.4) {
         difference() {
             union() {
                 // hexagonal shell
-                cylinder(h=body_l-thread_l, d=body_d, $fn=6);
+                cylinder(h=shell_h, d=shell_d, $fn=6);
                 // threaded top
-                translate([0, 0, body_l-thread_l])
-                    threads(thread_l, thread_d, thread_pitch, tap=false,
+                translate([0, 0, shell_h])
+                    AT_threads(cap_thread_l, cap_thread_d, cap_thread_pitch, tap=false,
                             nozzle_d=nozzle_d);
             }
-            // cable entry
-            translate([0, 0, -1])
-                cylinder(h=body_l+2, d=cable_d+nozzle_d);
+            // threads for PG7 gland
+            translate([0, 0, -0.01])
+                AT_threads(pg7_thread_l+0.01, pg7_thread_d, pg7_thread_pitch, tap=true,
+                    nozzle_d=nozzle_d);
+            // reducer (cone-shaped to enable printing w/o supports)
+            translate([0, 0, pg7_thread_l-0.01])
+                cylinder(h=reducer_h, d1=reducer_d1, d2=reducer_d2, $fn=6);
             // cavity for board (and support beneath the neck)
             translate([0, 0, th]) {
-                linear_extrude(body_l+1, convexity=4) {
+                linear_extrude(body_h+1, convexity=4) {
                     intersection() {
                         circle(d=neck_d + nozzle_d);
                         square([neck_d+nozzle_d, neck_d-3], center=true);
@@ -107,16 +62,16 @@ module PIR_housing(nozzle_d=0.4) {
                 }
             }
             // cavity for the neck
-            translate([0, 0, body_l-lip_th-neck_l])
+            translate([0, 0, body_h-lip_th-neck_l])
                 cylinder(h=neck_l+1, d=neck_d+nozzle_d);
             // recess for the lip of the lens
-            translate([0, 0, body_l-lip_th])
+            translate([0, 0, body_h-lip_th])
                 cylinder(h=lip_th+1, d=lip_d+nozzle_d);
             
             // Slot for attaching with a perpendicular zip tie.
             translate([0, ziptie_dy, ziptie_dz]) {
                 rotate([90, 0, 90]) {
-                    linear_extrude(body_d, center=true) {
+                    linear_extrude(shell_d, center=true) {
                         translate([-ziptie_th/2,-ziptie_w/2]) {
                             polygon([
                                 [0, 0],
@@ -130,9 +85,7 @@ module PIR_housing(nozzle_d=0.4) {
             }
             
             // Slot for attaching with a parallel zip tie.
-            shell_h = body_l - thread_l;
-            zip_r = shell_h/1.8;
-            translate([0, -body_d+ziptie_th, shell_h/2]) {
+            translate([0, -shell_d+ziptie_th, ziptie_dz]) {
                 rotate([0, 90, 0]) {
                     rotate_extrude(angle=180, convexity=4, $fa=3) {
                         translate([zip_r, 0]) {
@@ -144,22 +97,43 @@ module PIR_housing(nozzle_d=0.4) {
         }
     }
     
-    module cap(cap_h=thread_l+th) {
+    module cap(cap_h) {
         difference() {
-            cylinder(h=cap_h, d=body_d, $fn=6);
-            translate([0, 0, cap_h-thread_l+0.1])
-                threads(thread_l, thread_d, thread_pitch, tap=true,
+            cylinder(h=cap_h, d=shell_d, $fn=6);
+            translate([0, 0, cap_h-cap_thread_l+0.1])
+                AT_threads(cap_thread_l, cap_thread_d, cap_thread_pitch, tap=true,
                         nozzle_d=nozzle_d);
             translate([0, 0, -1])
                 cylinder(h=cap_h+1, d=lens_d+nozzle_d);
         }
     }
+    
+    module clamp_nut(clamp_h=thread_l+th) {
+        difference() {
+            union() {
+                cylinder(h=th, d=shell_d, $fn=6);
+                translate([0, 0, th-0.01])
+                    threads(thread_l, thread_d, thread_pitch, tap=false,
+                             nozzle_d=nozzle_d);
+            }
+            // cable entry
+            translate([0, 0, -0.01])
+                cylinder(h=clamp_nut_h+0.02, d1=clamp_nut_d1, d2=clamp_nut_d2);
+        }
+    }
+    
+    module radial_translate(angle, distance=1) {
+        translate([distance*cos(angle), distance*sin(angle), 0]) {
+            children();
+        }
+    }
 
-    spacing = body_d + 1;
-    translate([0, spacing, 0]) body();
-    translate([-spacing, 0, 0]) cap(thread_l+2*th);
-    translate([0, 0, 0])        cap(thread_l+th);
-    translate([ spacing, 0, 0]) cap(thread_l+3*th);
+    body();
+    spacing = shell_d + 1;
+//    radial_translate( 30, spacing) clamp_nut();
+//    radial_translate( 90, spacing) cap(cap_l);
+//    radial_translate(150, spacing) cap(cap_l+cap_dl);
+    radial_translate(210, spacing) cap(cap_l+2*cap_dl);
 }
 
 PIR_housing();
