@@ -18,7 +18,7 @@ module PIR_housing(nozzle_d=0.4) {
     pg7_thread_d = 12;
     pg7_thread_pitch = 1.5;
     pg7_thread_l = 4.5*pg7_thread_pitch;
-    sensor_l = 24;
+    sensor_l = 20;
     shell_h = pg7_thread_l + sensor_l + th;
     shell_d = max(cap_thread_d, pg7_thread_d) + 2*(th + nozzle_d);
     body_h = shell_h + cap_thread_l;
@@ -29,7 +29,7 @@ module PIR_housing(nozzle_d=0.4) {
     ziptie_th = 1.5 + nozzle_d;
     ziptie_dy = (cap_thread_d - ziptie_th)/2 - nozzle_d;
     ziptie_dz = sensor_l/2 + cap_thread_l;
-    zip_r = sensor_l/1.8;
+    zip_r = 15;
     cap_l = cap_thread_l + th;  // minimum cap length
     cap_dl = 3;  // step size for increasing lengths of the cap
 
@@ -108,20 +108,6 @@ module PIR_housing(nozzle_d=0.4) {
         }
     }
     
-    module clamp_nut(clamp_h=thread_l+th) {
-        difference() {
-            union() {
-                cylinder(h=th, d=shell_d, $fn=6);
-                translate([0, 0, th-0.01])
-                    threads(thread_l, thread_d, thread_pitch, tap=false,
-                             nozzle_d=nozzle_d);
-            }
-            // cable entry
-            translate([0, 0, -0.01])
-                cylinder(h=clamp_nut_h+0.02, d1=clamp_nut_d1, d2=clamp_nut_d2);
-        }
-    }
-    
     module radial_translate(angle, distance=1) {
         translate([distance*cos(angle), distance*sin(angle), 0]) {
             children();
@@ -130,10 +116,9 @@ module PIR_housing(nozzle_d=0.4) {
 
     body();
     spacing = shell_d + 1;
-//    radial_translate( 30, spacing) clamp_nut();
-//    radial_translate( 90, spacing) cap(cap_l);
-//    radial_translate(150, spacing) cap(cap_l+cap_dl);
-    radial_translate(210, spacing) cap(cap_l+2*cap_dl);
+    radial_translate(210, spacing) cap(cap_l);
+    radial_translate( 90, spacing) cap(cap_l+cap_dl);
+    radial_translate(150, spacing) cap(cap_l+2*cap_dl);
 }
 
 PIR_housing();
