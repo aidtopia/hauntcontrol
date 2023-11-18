@@ -1,3 +1,10 @@
+# Extra KiCAD directories
 *-backups
-generic fogger timer reference photos
+fp-info-cache
 
+# Gerbers for board manufacture are outputs, not source
+PCBWay
+
+# It's not worth storing the photos I used to figure out the fogger schematics.
+generic fogger timer reference photos
+litefx timer reference photos
