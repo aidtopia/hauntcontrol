@@ -410,7 +410,7 @@
   )
 
   (no_connect (at 171.196 101.6) (uuid ebe428ab-98bf-4050-ac20-327ea9aa3d88))
-  (no_connect (at 171.196 106.68) (uuid ebe428ab-98bf-4050-ac20-327ea9aa3d88))
+  (no_connect (at 171.196 106.68) (uuid ebe428ab-98bf-4050-ac20-327ea9aa3d89))
 
   (wire (pts (xy 130.302 101.6) (xy 133.35 101.6))
     (stroke (width 0) (type default) (color 0 0 0 0))
@@ -517,8 +517,8 @@
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 0885c36a-a9ff-4b41-87da-ace51eb684b8)
   )
-  (text "PicoBoo pulls ~{TRIGGER} to 12V,\nand provides +12VDC and GND.\n"
-    (at 186.944 104.648 0)
+  (text "PicoBoo pulls ~{TRIGGER} to 12V,\nthrough a 3300Ω resistor and\nprovides +12VDC and GND.\n"
+    (at 187.198 107.442 0)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 1594c694-d0cf-4516-a3df-ee565408a059)
   )
@@ -538,7 +538,8 @@
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 2ad213e6-4d28-47af-b6bb-fd26e79ea16d)
   )
-  (text "PIR accepts up to +12V,\nbut SIGNAL is 3.3V." (at 92.71 102.362 0)
+  (text "PIR accepts up to +12V,\nbut SIGNAL is 3.3V. The\nmaximum current SIGNAL\ncan source is 0.1mA."
+    (at 89.154 105.918 0)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 4c2c4532-9bed-4cb7-a16d-50878f22916d)
   )
