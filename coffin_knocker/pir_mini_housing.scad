@@ -107,6 +107,22 @@ module PIR_housing(nozzle_d=0.4) {
                 cylinder(h=cap_h+1, d=lens_d+nozzle_d);
         }
     }
+
+    // A longer version of a cap that has a tapered inner diameter to
+    // reduce reflections.
+    module snoot(cap_h) {
+        difference() {
+            cylinder(h=cap_h, d=shell_d, $fn=6);
+            translate([0, 0, cap_h-cap_thread_l+0.1])
+                AT_threads(cap_thread_l, cap_thread_d, cap_thread_pitch, tap=true,
+                        nozzle_d=nozzle_d);
+            d = lens_d + nozzle_d;
+            translate([0, 0, cap_h-cap_l])
+                cylinder(h=cap_l, d=d);
+            translate([0, 0, -1])
+                cylinder(h=cap_h-cap_l+1.01, d1=0.85*d, d2=d);
+        }
+    }
     
     module radial_translate(angle, distance=1) {
         translate([distance*cos(angle), distance*sin(angle), 0]) {
@@ -119,6 +135,7 @@ module PIR_housing(nozzle_d=0.4) {
     radial_translate(210, spacing) cap(cap_l);
     radial_translate( 90, spacing) cap(cap_l+cap_dl);
     radial_translate(150, spacing) cap(cap_l+2*cap_dl);
+    radial_translate(270, spacing) snoot(cap_l+4*cap_dl);
 }
 
 PIR_housing();
