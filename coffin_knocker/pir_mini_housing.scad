@@ -31,7 +31,8 @@ module PIR_housing(nozzle_d=0.4) {
     ziptie_dz = sensor_l/2 + cap_thread_l;
     zip_r = 15;
     cap_l = cap_thread_l + th;  // minimum cap length
-    cap_dl = 3;  // step size for increasing lengths of the cap
+    snoot_l = cap_l + 9;
+    snoot_aperture = 3;
 
     $fs=nozzle_d/2;
 
@@ -97,7 +98,8 @@ module PIR_housing(nozzle_d=0.4) {
         }
     }
     
-    module cap(cap_h) {
+    module cap(extra=0) {
+        cap_h = cap_l + extra;
         difference() {
             cylinder(h=cap_h, d=shell_d, $fn=6);
             translate([0, 0, cap_h-cap_thread_l+0.1])
@@ -108,19 +110,19 @@ module PIR_housing(nozzle_d=0.4) {
         }
     }
 
-    // A longer version of a cap that has a tapered inner diameter to
-    // reduce reflections.
-    module snoot(cap_h) {
+    // A version of a cap with a small aperture to dramatically limit
+    // the angle of the cone of detection.
+    module snoot(aperture_d=3) {
         difference() {
-            cylinder(h=cap_h, d=shell_d, $fn=6);
-            translate([0, 0, cap_h-cap_thread_l+0.1])
+            cylinder(h=snoot_l, d=shell_d, $fn=6);
+            translate([0, 0, snoot_l-cap_thread_l+0.1])
                 AT_threads(cap_thread_l, cap_thread_d, cap_thread_pitch, tap=true,
-                        nozzle_d=nozzle_d);
+                           nozzle_d=nozzle_d);
             d = lens_d + nozzle_d;
-            translate([0, 0, cap_h-cap_l])
-                cylinder(h=cap_l, d=d);
+            translate([0, 0, th])
+                cylinder(h=snoot_l, d=d);
             translate([0, 0, -1])
-                cylinder(h=cap_h-cap_l+1.01, d1=0.85*d, d2=d);
+                cylinder(h=snoot_l, d=aperture_d+nozzle_d);
         }
     }
     
@@ -132,10 +134,9 @@ module PIR_housing(nozzle_d=0.4) {
 
     body();
     spacing = shell_d + 1;
-    radial_translate(210, spacing) cap(cap_l);
-    radial_translate( 90, spacing) cap(cap_l+cap_dl);
-    radial_translate(150, spacing) cap(cap_l+2*cap_dl);
-    radial_translate(270, spacing) snoot(cap_l+4*cap_dl);
+    radial_translate(210, spacing) cap();
+    radial_translate( 90, spacing) cap(6);
+    radial_translate(150, spacing) snoot(snoot_aperture);
 }
 
 PIR_housing();
