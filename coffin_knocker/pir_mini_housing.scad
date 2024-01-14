@@ -1,5 +1,26 @@
 // Mini PIR sensor housing
-// Adrian McCarthy 2023
+// Adrian McCarthy 2023-2024
+
+// * Fits the HC-SR312 mini PIR motion sensor modules.
+// * The sensor cavity is shaped to orient the sensor consistently.
+// * The cap screws over the sensor to hold it securely in place and
+// to keep the lens array (the white plastic dome) in place.
+// * Slots in the housing accommodate zip-ties for mounting to posts
+// or rails.
+// * The back of the housing is threaded for a PG7 cable gland with
+// strain relief.
+// * The regular cap allows the dome to protrude from the end of the
+// housing for maximum sensing area.
+// * The longer cap slightly restricts the angle of the detection
+// cone but provides some protection to the plastic dome.
+// * The "snoot" is a cap with a small aperture for when you want to
+// drastically restrict the detection cone.
+// * To reduce the sensor's range, remove the lens array and/or
+// cover the opening of the cap/snoot with one or two layers of
+// cellophane tape.
+//
+// Print in PETG or PLA.
+// I recommend a layer height of 0.2 mm to get threads that fit well.
 
 use <aidthread.scad>
 
