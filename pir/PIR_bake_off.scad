@@ -1,8 +1,8 @@
 // PIR bake-off bracket
 // Adrian McCarthy 2021
 
-use <../../scad/PrintableParts/aidbolt.scad>
-use <../../scad/PrintableParts/aidutil.scad>
+use <aidbolt.scad>
+use <aidutil.scad>
 
 sensors = [
     ["Adafruit 189",    23,     "M2.5",     28.5/2,     0],
