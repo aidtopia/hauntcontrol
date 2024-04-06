@@ -35,8 +35,8 @@ class PIR {
     bool m_motion_detected;
 };
 
-PIR pir_sensors[] = { PIR(2, 3, 4), PIR(5, 6, 7) };
-char const * const names[] = { "Orange", "Black" };
+PIR pir_sensors[] = { PIR(2, 3, 4) };
+char const * const names[] = { "Orange" };
 int const led_pins[] = {8, 9};
 
 auto constexpr sensor_count = sizeof(pir_sensors) / sizeof(pir_sensors[0]);
