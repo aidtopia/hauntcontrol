@@ -6,7 +6,7 @@
 
 class MSGEQ7 {
   public:
-    // Driving the chip requires to digital output pins, reset and strobe.
+    // Driving the chip requires two digital output pins, reset and strobe.
     // Data is collected from a single analog input pin, data.
     MSGEQ7(int reset_pin, int strobe_pin, int data_pin) :
       m_reset_pin(reset_pin),

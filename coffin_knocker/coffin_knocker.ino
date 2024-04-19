@@ -39,18 +39,18 @@
 int constexpr motion_pin  = 2;  // input, HIGH indicates motion
 int constexpr solenoid_pin = 9;  // output, HIGH opens the valve
 
-template <int BUFFER_SIZE>
+template <uint8_t BUFFER_SIZE>
 class CommandBuffer {
   public:
     void begin() {
-      memset(buf, '\0', sizeof(buf));
+      memset(buf, '\0', BUFFER_SIZE);
       buflen = 0;
     }
 
     bool available() {
       while (Serial.available()) {
         char ch = Serial.read();
-        if (buflen == sizeof(buf)) buflen = 0;
+        if (buflen == BUFFER_SIZE) buflen = 0;
         switch (ch) {
           case '\r': break;
           case '\n':
@@ -76,10 +76,10 @@ class CommandBuffer {
 
   private:
     char buf[BUFFER_SIZE];
-    int buflen = 0;
+    uint8_t buflen = 0;
 };
 
-template <int COUNT, int MAGIC, int VERSION>
+template <uint8_t COUNT, int MAGIC, int VERSION>
 class Parameters {
   public:
     bool load_defaults() {
@@ -130,26 +130,27 @@ class Parameters {
       EEPROM.put(base_address, signature);
     }
 
-    void print_name(int i) {
+    void print_name(uint8_t i) {
+      if (i >= COUNT) return;
       do_print_name(i);
     }
 
     void show() const {
-      for (int i = 0; i < COUNT; ++i) {
+      for (uint8_t i = 0; i < COUNT; ++i) {
         Serial.print(F(" "));
-        print_name(i);
+        do_print_name(i);
         Serial.print(F(" = "));
         Serial.println(m_values[i]);
       }
     }
 
   protected:
-    long get_by_index(int i) const {
+    long get_by_index(uint8_t i) const {
       return (0 <= i && i < COUNT) ? m_values[i] : 0L;
     }
 
-    bool set_by_index(int i, long value) {
-      if (0 <= i && i < COUNT) {
+    bool set_by_index(uint8_t i, long value) {
+      if (i < COUNT) {
         m_values[i] = value;
         return true;
       }
@@ -159,13 +160,13 @@ class Parameters {
   private:
     virtual bool do_load_defaults() = 0;
     virtual bool do_sane() const = 0;
-    virtual void do_print_name(int i) const = 0;
+    virtual void do_print_name(uint8_t i) const = 0;
 
     int m_version;
     long m_values[COUNT];
 };
 
-enum class Parameter {
+enum class Parameter : uint8_t {
   // VERSION 1
   SUSPENSE_TIME,
   MIN_RUN_TIME,
@@ -180,7 +181,7 @@ enum class Parameter {
 };
 
 class CoffinKnockerParameters :
-  public Parameters<static_cast<int>(Parameter::COUNT), 307, 1>
+  public Parameters<static_cast<uint8_t>(Parameter::COUNT), 307, 1>
 {
   public:
     // The suspense time is how long (in milliseconds) after motion is detected
@@ -210,8 +211,8 @@ class CoffinKnockerParameters :
       return get(Parameter::LOCKOUT_TIME);
     }
 
-    long get(Parameter p) const { return get_by_index(static_cast<int>(p)); }
-    bool set(Parameter p, long value) { return set_by_index(static_cast<int>(p), value); }
+    long get(Parameter p) const { return get_by_index(static_cast<uint8_t>(p)); }
+    bool set(Parameter p, long value) { return set_by_index(static_cast<uint8_t>(p), value); }
 
   private:
     bool do_load_defaults() override {
@@ -239,8 +240,7 @@ class CoffinKnockerParameters :
       return true;
     }
 
-    void do_print_name(int i) const override {
-      if (i < 0 || static_cast<int>(Parameter::COUNT) <= i) return;
+    void do_print_name(uint8_t i) const override {
       auto source =
         reinterpret_cast<char const *>(pgm_read_word(m_names + i));
       for (auto ch = pgm_read_byte_near(source++); ch != '\0'; ch = pgm_read_byte_near(source++)) {
@@ -248,7 +248,7 @@ class CoffinKnockerParameters :
       }
     }
 
-    static char const * const m_names[static_cast<int>(Parameter::COUNT)];
+    static char const * const m_names[];
 } params;
 
 char const NAME_SUSPENSE[] PROGMEM = "SUSPENSE";
@@ -259,7 +259,7 @@ char const NAME_MAX_KNOCK_ON[] PROGMEM = "MAX_KNOCK_ON";
 char const NAME_MIN_KNOCK_OFF[] PROGMEM = "MIN_KNOCK_OFF";
 char const NAME_MAX_KNOCK_OFF[] PROGMEM = "MAX_KNOCK_OFF";
 char const NAME_LOCKOUT[] PROGMEM = "LOCKOUT";
-char const * const CoffinKnockerParameters::m_names[static_cast<int>(Parameter::COUNT)] PROGMEM = {
+char const * const CoffinKnockerParameters::m_names[] PROGMEM = {
   NAME_SUSPENSE,
   NAME_MIN_RUN, NAME_MAX_RUN,
   NAME_MIN_KNOCK_ON, NAME_MAX_KNOCK_ON,
@@ -267,7 +267,7 @@ char const * const CoffinKnockerParameters::m_names[static_cast<int>(Parameter::
   NAME_LOCKOUT
 };
 
-enum class State {
+enum class State : uint8_t {
   // The normal operating states...
   waiting,
   suspense,
@@ -335,7 +335,7 @@ class Parser {
     const char *m_p;
 };
 
-enum class Keyword {
+enum class Keyword : uint8_t {
   UNKNOWN, CLEAR, DEFAULTS, EEPROM, HELP, LIST, LOAD, RUN, SAVE, SET
 };
 
