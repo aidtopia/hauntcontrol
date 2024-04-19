@@ -1,0 +1,15 @@
+# STL and GCODE files are generated from OpenSCAD sources
+*.stl
+*.gcode
+
+# Reference schematics for fog machines and their controllers were
+# thrown together by me to use as a reference.  If I made any mistakes,
+# I don't want those out there.  And since they're not my designs, I
+# probably shouldn't make them public in a way that might encourage
+# copying.
+schematics/V_915_fogger/
+schematics/lite_fx_timer/
+
+# It's not worth storing these photos in the repo
+schematics/sensor_to_trigger/*.JPG
+pir/*.jpg
