@@ -7,9 +7,11 @@ DRAFT 2019-05-11
 
 NOTE:  Some of these might be YX5200 rather than YX5300.
 
-The YX5200 and YX5300 ARE a MP3 and WAV decoder chips that can be controlled and queried using a serial protocol.  These chips are the heart of inexpensive audio modules such as the DFPlayer Mini and the Catalex serial MP3 board.
+The YX5200 and YX5300 are MP3 and WAV decoder chips that can be controlled and queried using a serial protocol.  These chips are the heart of inexpensive audio modules such as the DFPlayer Mini, the Catalex serial MP3 board, and clones.
 
 The datasheets for these chips are in Chinese, and the translations to English are incomplete, confusing, ambiguous, and sometimes wrong.  The intent of this document is to be a more complete and accurate explanation of how to interface to modules based on this chip.  The information here is based on the commonly found English translations of the datasheet, experiments with DFPlayer Mini and Catalex MP3 boards, and nuggets of information contained in the open source demos and libraries others have written to interface microcontrollers to these devices.  See the References section.
+
+The devices I've tested may be clones.  I suspect there may be multiple versions of the chips, with slightly different sets of bugs.
 
 ### Audio Modules
 
@@ -33,15 +35,49 @@ Most of the datasheets provide a reference of the messages with little informati
 
 #### DFPlayer Mini
 
+##### Power
+
+You can power the DFPlayer Mini with a maximum of 5 volts DC.  The datasheet says the typical supply is 4.2 V.  You can insert a diode between a 5-volt supply and the VCC of the DFPlayer Mini to drop the voltage to approximately 4.3 V, which may improve the lifespan and reliability of the device.
+
+Remember to tie the grounds between the DFPlayer Mini and the microcontroller.
+
+DFPlayer Mini actually runs at 3.3 V.  An onboard regulator adjusts the supply voltage as needed.
+
 ##### Level Shifting for Serial Communication
 
-The DFPlayer Mini can (and probably should) be powered using 5 volts DC.  However, the serial lines use and expect only 3.3 volts.
+The DFPlayer Mini's serial lines use and expect only 3.3 volts.
 
-When using a 5-volt microcontroller, you must use level shifting between the microcontroller's TX pin to DFPlayer Mini's RX pin.  Some hobbyists fake this with a 1 k&ohm; resistor that limits the current but doesn't actually change the level.  A voltage divider can be used to bring the 5 V output from the microcontroller down to the 3.3 V level expected by the YX5300.  The most principled solution is to use an actual level shifter, e.g., with an opto-isolator.
+When using a 3.3-volt microcontroller, no special considerations are necessary.
 
-In the opposite direction, from the chip's TX to the microcontroller's RX, a direct connection is fine.  The 3.3 V should be enough for the microcontroller to read it as a digital high, even if the controller is normally expecting 5 V.
+When using a 5-volt microcontroller, however, you must use level shifting between the microcontroller's TX pin to DFPlayer Mini's RX pin.  If you don't, the TX pin may provide more current than the RX pin is designed to handle, which could damage the device.  Here are three ways to handle this:
 
-##### DAC versus SPK outputs
+* Limit the current with a 1 k&ohm; resistor in series.  Some of the datasheets endorse this approach.
+
+* Use a voltage divider to bring the 5-volt output from the microcontroller down to the 3.3-volt level.
+
+* Use an opto-isolator to relay the 5-volt signals at the 3.3-volt level.  The hobby electronics suppliers have a variety of small modules called level shifters for doing exactly this.
+
+In the opposite direction, from the chip's TX to the microcontroller's RX, a direct connection is fine.  A typical 5-volt microcontroller uses a threshold of 3.0 V to determine whether a digital input is high.  Since 3.3 V is higher than 3.0 V, the microcontroller shouldn't have a problem.
+
+##### DAC outputs
+
+The DFPlayer Mini provides access to the outputs of the DACs (digital-to-analog converters) for the left and right channels.
+
+The DAC signals are DC biased about 200 mV.
+
+For an audio file at maximum volume, the DAC signals range approximately from -600 mV to +600 mV (relative to the bias level).  That's a peak-to-peak range of 1.2 V and an RMS voltage of 425 mV.  These signals can power small earphones directly or be routed into an amplifier.
+
+When a file starts playing, the amplitude ramps up to the nominal value in about 50 ms.
+
+Do not send a DAC output directly to a GPIO pin.  Most microcontrollers require inputs to be between 0 V and the chip's operating voltage (e.g. 5 V).  The DAC outputs swing negative, which could damage the microcontroller.  You could bias the signal to ensure it's always positive and also clip it to the allowed range to make it safe for interfacing to a GPIO pin.
+
+##### SPK outputs
+
+There are two SPK outputs on the DFPlayer Mini.  They to _not_ correspond to the left and right audio channels.  The left and right channels are mixed down to a single channel which amplified by a low-power amplifier built into the module.  The SPK+ and SPK- signals together comprise a balanced output.
+
+You can connect a small 8-ohm 3-watt speaker directly to the SPK pins.
+
+The SPK outputs range approximately from 0 V to 4 V.  When no sound it being played, they float at roughly the middle of their range.  When sound is being played, the SPK- output is the inverse of the SPK+.
 
 ##### Optional USB Socket
 
