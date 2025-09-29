@@ -520,6 +520,8 @@ static void execute_command(char const *command) {
         case Keyword::EEPROM:
           if (!load_from_eeprom()) break;
           return;
+        default:
+          break;
       }
       break;
     case Keyword::RUN:
@@ -539,6 +541,7 @@ static void execute_command(char const *command) {
       list();
       return;
     }
+    default: break;
   }
   Serial.println(F("Type HELP for detailed instructions."));
 }
@@ -551,7 +554,7 @@ void setup() {
   pinMode(motion_pin, INPUT);
   Serial.begin(115200);
   while (!Serial) {}  // not necessary for Pro Mini, but no harm
-  Serial.println(F("\nCoffin Knocker"));
+  Serial.println(F("\nCoffin Knocker 2025"));
 
   EEPROM.begin();
 
